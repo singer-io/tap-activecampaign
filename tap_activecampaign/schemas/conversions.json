@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": ["null", "string"]
+    },
+    "value": {
+      "type": ["null", "integer"]
+    },
+    "currency": {
+      "type": ["null", "string"]
+    },
+    "limit": {
+      "type": ["null", "integer"]
+    },
+    "enforce_limit": {
+      "type": ["null", "integer"]
+    },
+    "cdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "udate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "id": {
+      "type": ["null", "integer"]
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "deal_group": {
+      "type": ["null", "integer"]
+    },
+    "user": {
+      "type": ["null", "integer"]
+    },
+    "cdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "id": {
+      "type": ["null", "integer"]
+    }
+  }
+}

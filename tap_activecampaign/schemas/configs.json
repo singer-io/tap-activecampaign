@@ -1,0 +1,49 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "keyname": {
+      "type": ["null", "string"]
+    },
+    "section": {
+      "type": ["null", "string"]
+    },
+    "item": {
+      "type": ["null", "string"]
+    },
+    "userid": {
+      "type": ["null", "integer"]
+    },
+    "val": {
+      "type": ["null", "string"]
+    },
+    "cdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "udate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "created_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "updated_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": ["null", "integer"]
+    },
+    "updated_by": {
+      "type": ["null", "integer"]
+    },
+    "id": {
+      "type": ["null", "integer"]
+    },
+    "owner": {
+      "type": ["null", "integer"]
+    }
+  }
+}

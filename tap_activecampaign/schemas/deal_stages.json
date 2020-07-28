@@ -1,0 +1,50 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "card_region_1": {
+      "type": ["null", "string"]
+    },
+    "card_region_2": {
+      "type": ["null", "string"]
+    },
+    "card_region_3": {
+      "type": ["null", "string"]
+    },
+    "card_region_4": {
+      "type": ["null", "string"]
+    },
+    "card_region_5": {
+      "type": ["null", "string"]
+    },
+    "cdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "color": {
+      "type": ["null", "string"]
+    },
+    "deal_order": {
+      "type": ["null", "string"]
+    },
+    "group": {
+      "type": ["null", "integer"]
+    },
+    "id": {
+      "type": ["null", "integer"]
+    },
+    "order": {
+      "type": ["null", "integer"]
+    },
+    "title": {
+      "type": ["null", "string"]
+    },
+    "udate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "width": {
+      "type": ["null", "integer"]
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contact": {
+      "type": ["null", "integer"]
+    },
+    "list": {
+      "type": ["null", "integer"]
+    },
+    "form": {
+      "type": ["null", "integer"]
+    },
+    "seriesid": {
+      "type": ["null", "integer"]
+    },
+    "sdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "udate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "status": {
+      "type": ["null", "integer"]
+    },
+    "responder": {
+      "type": ["null", "integer"]
+    },
+    "sync": {
+      "type": ["null", "integer"]
+    },
+    "unsubreason": {
+      "type": ["null", "string"]
+    },
+    "campaign": {
+      "type": ["null", "integer"]
+    },
+    "message": {
+      "type": ["null", "integer"]
+    },
+    "first_name": {
+      "type": ["null", "string"]
+    },
+    "last_name": {
+      "type": ["null", "string"]
+    },
+    "ip4_sub": {
+      "type": ["null", "integer"]
+    },
+    "sourceid": {
+      "type": ["null", "integer"]
+    },
+    "autosync_log": {
+      "type": ["null", "integer"]
+    },
+    "ip4_last": {
+      "type": ["null", "integer"]
+    },
+    "ip4_unsub": {
+      "type": ["null", "integer"]
+    },
+    "created_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "updated_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "created_by": {
+      "type": ["null", "integer"]
+    },
+    "updated_by": {
+      "type": ["null", "integer"]
+    },
+    "unsubscribe_automation": {
+      "type": ["null", "integer"]
+    },
+    "id": {
+      "type": ["null", "integer"]
+    },
+    "automation": {
+      "type": ["null", "integer"]
+    }
+  }
+}

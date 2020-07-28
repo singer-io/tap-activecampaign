@@ -1,0 +1,3 @@
+include LICENSE
+include tap_activecampaign/schemas/*.json
+include tests/*.py

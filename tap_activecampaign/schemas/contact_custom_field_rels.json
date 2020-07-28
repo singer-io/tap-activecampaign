@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "field": {
+      "type": ["null", "integer"]
+    },
+    "relid": {
+      "type": ["null", "integer"]
+    },
+    "dorder": {
+      "type": ["null", "integer"]
+    },
+    "cdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "id": {
+      "type": ["null", "integer"]
+    }
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "externalid": {
+      "type": ["null", "string"]
+    },
+    "source": {
+      "type": ["null", "integer"]
+    },
+    "email": {
+      "type": ["null", "string"]
+    },
+    "currency": {
+      "type": ["null", "string"]
+    },
+    "connectionid": {
+      "type": ["null", "integer"]
+    },
+    "order_url": {
+      "type": ["null", "string"]
+    },
+    "shipping_method": {
+      "type": ["null", "string"]
+    },
+    "total_price": {
+      "anyOf": [
+          {
+              "type": "null"
+          },
+          {
+              "type": "number",
+              "multipleOf": 1e-8
+          }
+      ]
+    },
+    "shipping_amount": {
+      "anyOf": [
+          {
+              "type": "null"
+          },
+          {
+              "type": "number",
+              "multipleOf": 1e-8
+          }
+      ]
+    },
+    "tax_amount": {
+      "anyOf": [
+          {
+              "type": "null"
+          },
+          {
+              "type": "number",
+              "multipleOf": 1e-8
+          }
+      ]
+    },
+    "discount_amount": {
+      "anyOf": [
+          {
+              "type": "null"
+          },
+          {
+              "type": "number",
+              "multipleOf": 1e-8
+          }
+      ]
+    },
+    "external_created_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "external_updated_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "total_products": {
+      "type": ["null", "integer"]
+    },
+    "created_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "updated_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "state": {
+      "type": ["null", "integer"]
+    },
+    "connection": {
+      "type": ["null", "integer"]
+    },
+    "order_products": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": ["null", "integer"]
+          }
+        }
+      ]
+    },
+    "customer": {
+      "type": ["null", "integer"]
+    },
+    "order_date": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "tstamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "id": {
+      "type": ["null", "integer"]
+    }
+  }
+}

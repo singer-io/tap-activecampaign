@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": ["null", "integer"]
+    },
+    "field_label": {
+      "type": ["null", "string"]
+    },
+    "field_type": {
+      "type": ["null", "string"]
+    },
+    "field_options": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": ["null", "string"]
+          }
+        }
+      ]
+    },
+    "field_default": {
+      "type": ["null", "string"]
+    },
+    "field_default_currency": {
+      "type": ["null", "string"]
+    },
+    "is_form_visible": {
+      "type": ["null", "boolean"]
+    },
+    "is_required": {
+      "type": ["null", "boolean"]
+    },
+    "display_order": {
+      "type": ["null", "integer"]
+    },
+    "personalization": {
+      "type": ["null", "string"]
+    },
+    "known_field_id": {
+      "type": ["null", "integer"]
+    },
+    "hide_field_flag": {
+      "type": ["null", "boolean"]
+    },
+    "created_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "updated_timestamp": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    }
+  }
+}

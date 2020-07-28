@@ -1,0 +1,60 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contact": {
+      "type": ["null", "integer"]
+    },
+    "seriesid": {
+      "type": ["null", "integer"]
+    },
+    "startid": {
+      "type": ["null", "integer"]
+    },
+    "status": {
+      "type": ["null", "integer"]
+    },
+    "batchid": {
+      "type": ["null", "string"]
+    },
+    "adddate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "remdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "timespan": {
+      "type": ["null", "integer"]
+    },
+    "lastblock": {
+      "type": ["null", "integer"]
+    },
+    "lastlogid": {
+      "type": ["null", "integer"]
+    },
+    "lastdate": {
+      "type": ["null", "string"],
+      "format": "date-time"
+    },
+    "completed_elements": {
+      "type": ["null", "integer"]
+    },
+    "total_elements": {
+      "type": ["null", "integer"]
+    },
+    "completed": {
+      "type": ["null", "integer"]
+    },
+    "complete_value": {
+      "type": ["null", "integer"]
+    },
+    "id": {
+      "type": ["null", "integer"]
+    },
+    "automation": {
+      "type": ["null", "integer"]
+    }
+  }
+}
