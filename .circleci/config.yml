@@ -14,6 +14,10 @@ jobs:
             pip install .[dev]
       - add_ssh_keys
       - run:
+          name: 'pylint'
+          command: |
+            make test
+      - run:
           name: 'Integration Tests'
           command: |
             aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
@@ -30,7 +34,8 @@ workflows:
   version: 2
   commit:
     jobs:
-      - build
+      - build:
+          context: circleci-user
   build_daily:
     triggers:
       - schedule:
@@ -40,4 +45,5 @@ workflows:
               only:
                 - master
     jobs:
-      - build
+      - build:
+          context: circleci-user
