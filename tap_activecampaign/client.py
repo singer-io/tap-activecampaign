@@ -123,10 +123,10 @@ class ActiveCampaignClient(object):
             url=url,
             headers=headers)
         if response.status_code != 200:
-            LOGGER.error('Error status_code = {}'.format(response.status_code))
+            LOGGER.error('Error status_code = %s', response.status_code)
             raise_for_error(response)
-        else:
-            return True
+
+        return True
 
 
     @backoff.on_exception(backoff.expo,
@@ -179,8 +179,8 @@ class ActiveCampaignClient(object):
         try:
             response_json = response.json()
         except Exception as err:
-            LOGGER.error('{}'.format(err))
-            LOGGER.error('response content: {}'.format(response.content))
+            LOGGER.error('error: %s', err)
+            LOGGER.error('response content: %s', response.content)
             raise Exception(err)
 
         return response_json
