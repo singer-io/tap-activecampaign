@@ -335,11 +335,11 @@ This tap:
     While developing the activecampaign tap, the following utilities were run in accordance with Singer.io best practices:
     Pylint to improve [code quality](https://github.com/singer-io/getting-started/blob/master/docs/BEST_PRACTICES.md#code-quality):
     ```bash
-    > pylint tap_activecampaign -d missing-docstring -d logging-format-interpolation -d too-many-locals -d too-many-arguments
+    > pylint tap_activecampaign --disable 'broad-except,chained-comparison,empty-docstring,fixme,invalid-name,line-too-long,missing-class-docstring,missing-function-docstring,missing-module-docstring,no-else-raise,no-else-return,too-few-public-methods,too-many-arguments,too-many-branches,too-many-lines,too-many-locals,ungrouped-imports,wrong-spelling-in-comment,wrong-spelling-in-docstring'
     ```
     Pylint test resulted in the following score:
     ```bash
-    Your code has been rated at 9.78/10
+    Your code has been rated at 9.95/10.
     ```
 
     To [check the tap](https://github.com/singer-io/singer-tools#singer-check-tap) and verify working:
@@ -350,76 +350,77 @@ This tap:
     Check tap resulted in the following:
     ```bash
       The output is valid.
-      It contained 720 messages for 59 streams.
+      It contained 722 messages for 59 streams.
 
           59 schema messages
-          502 record messages
+          504 record messages
           159 state messages
 
       Details by stream:
       +------------------------------+---------+---------+
       | stream                       | records | schemas |
       +------------------------------+---------+---------+
-      | ecommerce_order_activities   | 1       | 1       |
-      | contact_emails               | 1       | 1       |
-      | task_types                   | 6       | 1       |
-      | email_activities             | 4       | 1       |
-      | bounce_logs                  | 7       | 1       |
-      | ecommerce_orders             | 1       | 1       |
-      | contact_lists                | 9       | 1       |
-      | contact_deals                | 2       | 1       |
-      | ecommerce_customers          | 2       | 1       |
-      | forms                        | 3       | 1       |
-      | deal_custom_fields           | 5       | 1       |
-      | deals                        | 16      | 1       |
-      | contact_custom_field_options | 6       | 1       |
-      | sms                          | 1       | 1       |
-      | accounts                     | 9       | 1       |
-      | contact_custom_field_rels    | 1       | 1       |
-      | activities                   | 25      | 1       |
-      | lists                        | 6       | 1       |
-      | addresses                    | 3       | 1       |
-      | saved_responses              | 3       | 1       |
-      | messages                     | 26      | 1       |
-      | conversions                  | 3       | 1       |
       | contact_data                 | 5       | 1       |
-      | goals                        | 3       | 1       |
-      | tags                         | 7       | 1       |
-      | deal_activities              | 44      | 1       |
-      | account_contacts             | 9       | 1       |
-      | users                        | 2       | 1       |
-      | segments                     | 16      | 1       |
-      | contact_conversions          | 2       | 1       |
-      | groups                       | 2       | 1       |
-      | brandings                    | 1       | 1       |
-      | ecommerce_order_products     | 2       | 1       |
-      | calendars                    | 3       | 1       |
-      | contact_custom_fields        | 2       | 1       |
-      | automation_blocks            | 66      | 1       |
-      | campaign_lists               | 18      | 1       |
-      | scores                       | 2       | 1       |
       | deal_stages                  | 1       | 1       |
-      | deal_group_users             | 1       | 1       |
-      | webhooks                     | 2       | 1       |
-      | campaign_links               | 21      | 1       |
-      | contacts                     | 14      | 1       |
-      | configs                      | 21      | 1       |
-      | ecommerce_connections        | 2       | 1       |
-      | conversion_triggers          | 7       | 1       |
-      | campaigns                    | 12      | 1       |
-      | account_custom_fields        | 13      | 1       |
-      | deal_custom_field_values     | 9       | 1       |
-      | tasks                        | 4       | 1       |
-      | site_messages                | 2       | 1       |
-      | campaign_messages            | 13      | 1       |
-      | deal_groups                  | 3       | 1       |
-      | templates                    | 1       | 1       |
-      | contact_automations          | 19      | 1       |
-      | contact_tags                 | 8       | 1       |
       | automations                  | 9       | 1       |
+      | contact_emails               | 1       | 1       |
+      | contacts                     | 14      | 1       |
+      | scores                       | 2       | 1       |
       | contact_custom_field_values  | 1       | 1       |
+      | campaign_messages            | 13      | 1       |
+      | ecommerce_orders             | 1       | 1       |
+      | activities                   | 25      | 1       |
+      | task_types                   | 6       | 1       |
+      | goals                        | 3       | 1       |
+      | ecommerce_connections        | 2       | 1       |
+      | contact_custom_field_options | 6       | 1       |
+      | contact_custom_field_rels    | 1       | 1       |
+      | deal_groups                  | 3       | 1       |
+      | tags                         | 7       | 1       |
+      | conversions                  | 3       | 1       |
+      | conversion_triggers          | 7       | 1       |
+      | ecommerce_order_products     | 2       | 1       |
+      | brandings                    | 1       | 1       |
+      | account_contacts             | 9       | 1       |
+      | deal_custom_fields           | 5       | 1       |
       | account_custom_field_values  | 15      | 1       |
+      | users                        | 2       | 1       |
+      | contact_lists                | 9       | 1       |
+      | contact_conversions          | 2       | 1       |
+      | accounts                     | 9       | 1       |
+      | ecommerce_customers          | 2       | 1       |
+      | tasks                        | 4       | 1       |
+      | automation_blocks            | 66      | 1       |
+      | site_messages                | 2       | 1       |
+      | deal_activities              | 44      | 1       |
+      | contact_tags                 | 8       | 1       |
+      | lists                        | 6       | 1       |
+      | messages                     | 26      | 1       |
+      | campaign_links               | 21      | 1       |
+      | deal_custom_field_values     | 9       | 1       |
+      | sms                          | 1       | 1       |
+      | ecommerce_order_activities   | 1       | 1       |
+      | segments                     | 16      | 1       |
+      | email_activities             | 4       | 1       |
+      | campaigns                    | 12      | 1       |
+      | contact_deals                | 2       | 1       |
+      | contact_custom_fields        | 2       | 1       |
+      | webhooks                     | 2       | 1       |
+      | saved_responses              | 3       | 1       |
+      | account_custom_fields        | 13      | 1       |
+      | deals                        | 16      | 1       |
+      | deal_group_users             | 1       | 1       |
+      | forms                        | 3       | 1       |
+      | groups                       | 2       | 1       |
+      | templates                    | 1       | 1       |
+      | campaign_lists               | 18      | 1       |
+      | configs                      | 21      | 1       |
+      | addresses                    | 3       | 1       |
+      | bounce_logs                  | 9       | 1       |
+      | calendars                    | 3       | 1       |
+      | contact_automations          | 19      | 1       |
       +------------------------------+---------+---------+
+
 
     ```
 ---

@@ -1,9 +1,5 @@
-from datetime import timedelta
-import pytz
-import math
 import singer
 from singer import metrics, metadata, Transformer, utils
-from singer.utils import strptime_to_utc, strftime
 from tap_activecampaign.transform import transform_json
 from tap_activecampaign.streams import STREAMS
 
@@ -15,7 +11,7 @@ def write_schema(catalog, stream_name):
     try:
         singer.write_schema(stream_name, schema, stream.key_properties)
     except OSError as err:
-        LOGGER.error('OS Error writing schema for: {}'.format(stream_name))
+        LOGGER.error('OS Error writing schema for: %s', stream_name)
         raise err
 
 
@@ -23,12 +19,12 @@ def write_record(stream_name, record, time_extracted):
     try:
         singer.messages.write_record(stream_name, record, time_extracted=time_extracted)
     except OSError as err:
-        LOGGER.error('OS Error writing record for: {}'.format(stream_name))
-        LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+        LOGGER.error('OS Error writing record for: %s', stream_name)
+        LOGGER.error('Stream: %s, record: %s', stream_name, record)
         raise err
     except TypeError as err:
-        LOGGER.error('Type Error writing record for: {}'.format(stream_name))
-        LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+        LOGGER.error('Type Error writing record for: %s', stream_name)
+        LOGGER.error('Stream: %s, record: %s', stream_name, record)
         raise err
 
 
@@ -46,10 +42,11 @@ def write_bookmark(state, stream, value):
     if 'bookmarks' not in state:
         state['bookmarks'] = {}
     state['bookmarks'][stream] = value
-    LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
+    LOGGER.info('Write state for stream: %s, value: %s', stream, value)
     singer.write_state(state)
 
 
+#pylint: disable=protected-access
 def transform_datetime(this_dttm):
     with Transformer() as transformer:
         new_dttm = transformer._transform_datetime(this_dttm)
@@ -83,8 +80,8 @@ def process_records(catalog, #pylint: disable=too-many-branches
                         schema,
                         stream_metadata)
                 except Exception as err:
-                    LOGGER.error('Transformer Error: {}'.format(err))
-                    LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+                    LOGGER.error('Transformer Error: %s', err)
+                    LOGGER.error('Stream: %s, record: %s', stream_name, record)
                     raise err
 
                 # Reset max_bookmark_value to new value if higher
@@ -110,6 +107,7 @@ def process_records(catalog, #pylint: disable=too-many-branches
 
 
 # Sync a specific parent or child endpoint.
+#pylint: disable=too-many-statements
 def sync_endpoint(
         client,
         catalog,
@@ -135,23 +133,22 @@ def sync_endpoint(
 
     last_datetime = get_bookmark(state, stream_name, start_date)
     max_bookmark_value = last_datetime
-    LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
-         stream_name, bookmark_field, last_datetime))
-    now_datetime = utils.now()
-    last_dttm = strptime_to_utc(last_datetime)
+    LOGGER.info('stream: %s, bookmark_field: %s, last_datetime: %s', \
+        stream_name, bookmark_field, last_datetime)
     endpoint_total = 0
 
     # pagination: loop thru all pages of data
     # Pagination reference: https://developers.activecampaign.com/reference#pagination
     # Each page has an offset (starting value) and a limit (batch size, number of records)
     # Increase the "offset" by the "limit" for each batch.
-    # Continue until the "record_count" returned < "limit" is null/zero or 
+    # Continue until the "record_count" returned < "limit" is null/zero or
     offset = 0 # Starting offset value for each batch API call
     limit = 100 # Batch size; Number of records per API call; Max = 100
     total_records = 0 # Initialize total
     record_count = limit # Initialize, reset for each API call
     page = 1
 
+    #pylint: disable=too-many-nested-blocks
     while offset <= total_records: # break out of loop when record_count < limit (or not data returned)
         params = {
             'offset': offset,
@@ -167,11 +164,13 @@ def sync_endpoint(
         querystring = None
         querystring = '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
 
-        LOGGER.info('URL for Stream {}: {}{}{}'.format(
+        #pylint: disable=logging-too-many-args
+        url_str = 'URL for Stream {}: {}{}{}'.format(
             stream_name,
             client.base_url,
             path,
-            '?{}'.format(querystring) if params else ''))
+            '?{}'.format(querystring) if params else '')
+        LOGGER.info('URL for Stream: %s', url_str)
 
         # API request data
         data = {}
@@ -187,30 +186,30 @@ def sync_endpoint(
 
         # Transform data with transform_json from transform.py
         # The data_key identifies the array/list of records below the <root> element
-        # LOGGER.info('data = {}'.format(data)) # TESTING, comment out
+        # LOGGER.info('data = %s', data) # TESTING, comment out
         transformed_data = [] # initialize the record list
         data_list = []
         data_dict = {}
         if data_key in data:
             if isinstance(data[data_key], list):
-                transformed_data = transform_json(data, stream_name, data_key)
+                transformed_data = transform_json(data, data_key)
             elif isinstance(data[data_key], dict):
                 data_list.append(data[data_key])
                 data_dict[data_key] = data_list
-                transformed_data = transform_json(data_dict, stream_name, data_key)
+                transformed_data = transform_json(data_dict, data_key)
         else: # data_key not in data
             if isinstance(data, list):
                 data_list = data
                 data_dict[data_key] = data_list
-                transformed_data = transform_json(data_dict, stream_name, data_key)
+                transformed_data = transform_json(data_dict, data_key)
             elif isinstance(data, dict):
                 data_list.append(data)
                 data_dict[data_key] = data_list
-                transformed_data = transform_json(data_dict, stream_name, data_key)
+                transformed_data = transform_json(data_dict, data_key)
 
-        # LOGGER.info('transformed_data = {}'.format(transformed_data)) # TESTING, comment out
+        # LOGGER.info('transformed_data = %s', transformed_data) # TESTING, comment out
         if not transformed_data or transformed_data is None:
-            LOGGER.info('No transformed data for data = {}'.format(data))
+            LOGGER.info('No transformed data for data = %s', data)
             break # No data results
 
         i = 0
@@ -226,8 +225,8 @@ def sync_endpoint(
             # Verify key id_fields are present
             for key in id_fields:
                 if not record.get(key):
-                    LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
-                        stream_name, key, record))
+                    LOGGER.error('Stream: %s, Missing key %s in record: %s', \
+                        stream_name, key, record)
                     raise RuntimeError
             i = i + 1
 
@@ -242,8 +241,8 @@ def sync_endpoint(
             last_datetime=last_datetime,
             parent=parent,
             parent_id=parent_id)
-        LOGGER.info('Stream {}, batch processed {} records'.format(
-            stream_name, record_count))
+        LOGGER.info('Stream %s, batch processed %s records', \
+            stream_name, record_count)
         endpoint_total = endpoint_total + record_count
 
         # Loop thru parent batch records for each children objects (if should stream)
@@ -251,7 +250,7 @@ def sync_endpoint(
         if children:
             for child_stream_name, child_endpoint_config in children.items():
                 if child_stream_name in selected_streams:
-                    LOGGER.info('START Syncing: {}'.format(child_stream_name))
+                    LOGGER.info('START Syncing: %s', child_stream_name)
                     write_schema(catalog, child_stream_name)
                     # For each parent record
                     for record in transformed_data:
@@ -267,8 +266,8 @@ def sync_endpoint(
 
                         # sync_endpoint for child
                         LOGGER.info(
-                            'START Sync for Stream: {}, parent_stream: {}, parent_id: {}'\
-                                .format(child_stream_name, stream_name, parent_id))
+                            'START Sync for Stream: %s, parent_stream: %s, parent_id: %s', \
+                                child_stream_name, stream_name, parent_id)
                         child_path = child_endpoint_config.get(
                             'path', child_stream_name).format(str(parent_id))
                         child_bookmark_field = next(iter(child_endpoint_config.get(
@@ -286,8 +285,8 @@ def sync_endpoint(
                             parent=child_endpoint_config.get('parent'),
                             parent_id=parent_id)
                         LOGGER.info(
-                            'FINISHED Sync for Stream: {}, parent_id: {}, total_records: {}'\
-                                .format(child_stream_name, parent_id, child_total_records))
+                            'FINISHED Sync for Stream: %s, parent_id: %s, total_records: %i', \
+                                child_stream_name, parent_id, child_total_records)
                         # End transformed data record loop
                     # End if child in selected streams
                 # End child streams for parent
@@ -306,12 +305,12 @@ def sync_endpoint(
         if to_rec > total_records:
             to_rec = total_records
 
-        LOGGER.info('Synced Stream: {}, page: {}, {} to {} of total records: {}'.format(
-            stream_name,
-            page,
-            offset,
-            to_rec,
-            total_records))
+        LOGGER.info('Extracted Stream: %s, page: %i, %i to %i of total records: %i', \
+                    stream_name,
+                    page,
+                    offset + 1,
+                    to_rec,
+                    total_records)
         # Pagination: increment the offset by the limit (batch-size) and page
         offset = offset + limit
         page = page + 1
@@ -322,7 +321,8 @@ def sync_endpoint(
     if bookmark_field:
         write_bookmark(state, stream_name, max_bookmark_value)
 
-    # Return total_records (for all pages and date windows)
+    # Return endpoint_total loaded (for all pages); records may filtered based on bookmark
+    LOGGER.info('Loaded Stream: %s, total records: %i', stream_name, endpoint_total)
     return endpoint_total
 
 
@@ -344,11 +344,11 @@ def sync(client, config, catalog, state):
     # Get selected_streams from catalog, based on state last_stream
     #   last_stream = Previous currently synced stream, if the load was interrupted
     last_stream = singer.get_currently_syncing(state)
-    LOGGER.info('last/currently syncing stream: {}'.format(last_stream))
+    LOGGER.info('last/currently syncing stream: %s', last_stream)
     selected_streams = []
     for stream in catalog.get_selected_streams(state):
         selected_streams.append(stream.stream)
-    LOGGER.info('selected_streams: {}'.format(selected_streams))
+    LOGGER.info('selected_streams: %s', selected_streams)
 
     if not selected_streams or selected_streams == []:
         return
@@ -356,7 +356,7 @@ def sync(client, config, catalog, state):
     # Loop through endpoints in selected_streams
     for stream_name, endpoint_config in STREAMS.items():
         if stream_name in selected_streams:
-            LOGGER.info('START Syncing: {}'.format(stream_name))
+            LOGGER.info('START Syncing: %s', stream_name)
             write_schema(catalog, stream_name)
             update_currently_syncing(state, stream_name)
             path = endpoint_config.get('path', stream_name)
@@ -373,6 +373,6 @@ def sync(client, config, catalog, state):
                 selected_streams=selected_streams)
 
             update_currently_syncing(state, None)
-            LOGGER.info('FINISHED Syncing: {}, total_records: {}'.format(
-                stream_name,
-                total_records))
+            LOGGER.info('FINISHED Syncing: %s, total_records: %i', \
+                        stream_name,
+                        total_records)
