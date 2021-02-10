@@ -130,7 +130,7 @@ class ActiveCampaignClient(object):
 
 
     @backoff.on_exception(backoff.expo,
-                          (Server5xxError, ConnectionError, Server429Error),
+                          (Server5xxError, ConnectionError, Server429Error, OSError),
                           max_tries=5,
                           factor=2)
     # Rate limit: https://developers.activecampaign.com/reference#rate-limits
