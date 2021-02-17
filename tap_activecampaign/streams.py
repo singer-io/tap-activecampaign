@@ -585,8 +585,8 @@ STREAMS = {
       'data_key': 'ecomOrderActivities',
       'key_properties': ['id'],
       'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
+      'replication_keys': ['updated_date'],
+      'created_timestamp': 'created_date',
       'links': []
     },
 
