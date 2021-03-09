@@ -98,7 +98,7 @@ def process_records(catalog, #pylint: disable=too-many-branches
                     bookmark_dttm = transform_datetime(transformed_record[bookmark_field])
                     # Keep only records whose bookmark is after the last_datetime
                     if bookmark_dttm:
-                        if bookmark_dttm >= last_dttm:
+                        if bookmark_dttm > last_dttm:
                             write_record(stream_name, transformed_record, \
                                 time_extracted=time_extracted)
                             counter.increment()
