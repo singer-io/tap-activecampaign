@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.0.6
+  * Fixed issue where a Connection Reset Error was not being retried [#4](https://github.com/singer-io/tap-activecampaign/pull/4)
+
 ## 0.0.5
   * Fixing issue that was causing duplication of records to be emitted and updated stream with correct replication key and created at timestamp. [#5](https://github.com/singer-io/tap-activecampaign/pull/5)
 
