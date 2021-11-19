@@ -19,34 +19,64 @@ class Server429Error(Exception):
 
 class ActiveCampaignError(Exception):
     pass
-
-
-class ActiveCampaignAuthenticationError(ActiveCampaignError):
+class ActiveCampaignBadRequestError(ActiveCampaignError):
     pass
 
+class ActiveCampaignUnauthorizedError(ActiveCampaignError):
+    pass
+
+class ActiveCampaignForbiddenError(ActiveCampaignError):
+    pass
 
 class ActiveCampaignNotFoundError(ActiveCampaignError):
     pass
 
-
 class ActiveCampaignUnprocessableEntityError(ActiveCampaignError):
     pass
 
+class ActiveCampaignRateLimitError(Server429Error):
+    pass
 
-class ActiveCampaignInternalServiceError(ActiveCampaignError):
+class ActiveCampaignInternalServerError(Server5xxError):
     pass
 
 
 # Errors Reference: https://developers.activecampaign.com/reference#errors
 STATUS_CODE_EXCEPTION_MAPPING = {
-    403: ActiveCampaignAuthenticationError,
-    404: ActiveCampaignNotFoundError,
-    422: ActiveCampaignUnprocessableEntityError,
-    500: ActiveCampaignInternalServiceError}
+    400: {
+        "raise_exception": ActiveCampaignBadRequestError,
+        "message": "A validation exception has occurred."
+    },
+    401: {
+        "raise_exception": ActiveCampaignUnauthorizedError,
+        "message": "Invalid authorization credentials."
+    },
+    403: {
+        "raise_exception": ActiveCampaignForbiddenError,
+        "message": "The request could not be authenticated or the authenticated user is not authorized to access the requested resource."
+    },
+    404: {
+        "raise_exception": ActiveCampaignNotFoundError,
+        "message": "The requested resource does not exist."
+    },
+    422: {
+        "raise_exception": ActiveCampaignUnprocessableEntityError,
+        "message": "The request could not be processed, usually due to a missing or invalid parameter."
+    },
+    429: {
+        "raise_exception": ActiveCampaignRateLimitError,
+        "message": "The user has sent too many requests in a given amount of time ('rate limiting') - contact support or account manager for more details."
+    },
+    500: {
+        "raise_exception": ActiveCampaignInternalServerError,
+        "message": "The server encountered an unexpected condition which prevented" \
+            " it from fulfilling the request."
+    }
+}
 
 def get_exception_for_status_code(status_code):
-    return STATUS_CODE_EXCEPTION_MAPPING.get(status_code, ActiveCampaignError)
-
+    # Map the status code with `STATUS_CODE_EXCEPTION_MAPPING` dictionary and accordingly return the error.
+    return STATUS_CODE_EXCEPTION_MAPPING.get(status_code, {}).get("raise_exception", ActiveCampaignError)
 
 # Example 422 error
 # {
@@ -60,30 +90,31 @@ def get_exception_for_status_code(status_code):
 #   ]
 # }
 def raise_for_error(response):
-    try:
-        response.raise_for_status()
-    except (requests.HTTPError, requests.ConnectionError) as error:
-        try:
-            content_length = len(response.content)
-            if content_length == 0:
-                # There is nothing we can do here since ActiveCampaign has neither sent
-                # us a 2xx response nor a response content.
-                return
-            response_json = response.json()
-            errors = response_json.get('errors', [])
+    # Class for each error defined above which extends `ActiveCampaignError`. If response contain `errors` 
+    # object with multiple errors perpare error message containing title of all error  in `errors` object.
+    # Otherwise perpare custom default message and raise the exception.
 
-            if errors:
-                status_code = response.get('status')
-                message = '{}'.format(status_code)
-                for error in errors:
-                    title = error.get('title')
-                    message = '{}; {}'.format(message, title)
-                ex = get_exception_for_status_code(status_code)
-                raise ex(message)
-            else:
-                raise ActiveCampaignError(error)
-        except (ValueError, TypeError):
-            raise ActiveCampaignError(error)
+    try:
+        response_json = response.json() # retrieve json response
+    except Exception:
+        response_json = {}
+    errors = response_json.get('errors', [])
+    status_code = response.status_code
+    if errors: # response containing `errors` object
+        message = 'HTTP-error-code: {}, Error:'.format(status_code)
+        # loop through all errors
+        for error in errors:
+            title = error.get('title')
+            message = '{} {}'.format(message, title)
+            exc = get_exception_for_status_code(status_code)
+    else:
+        # prepare custom default error message
+        message = "HTTP-error-code: {}, Error: {}".format(status_code,
+                response_json.get("message", STATUS_CODE_EXCEPTION_MAPPING.get(
+                status_code, {}).get("message", "Unknown Error")))
+        exc = get_exception_for_status_code(status_code)
+
+    raise exc(message) from None
 
 
 class ActiveCampaignClient(object):
@@ -98,6 +129,11 @@ class ActiveCampaignClient(object):
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
 
+    # Backoff for ConnectionError and 429 rate limit error.
+    @backoff.on_exception(backoff.expo,
+                          (ConnectionError, Server429Error),
+                          max_tries=5,
+                          factor=2)
     def __enter__(self):
         self.__verified = self.check_api_token()
         return self
@@ -118,12 +154,11 @@ class ActiveCampaignClient(object):
         headers['Api-Token'] = self.__api_token
         headers['Accept'] = 'application/json'
         url = self.base_url
-        response = self.__session.get(
+        response = self.__session.post(
             # Simple endpoint that returns 1 record w/ default organization URN
             url=url,
             headers=headers)
         if response.status_code != 200:
-            LOGGER.error('Error status_code = {}'.format(response.status_code))
             raise_for_error(response)
         else:
             return True
@@ -165,12 +200,6 @@ class ActiveCampaignClient(object):
         with metrics.http_request_timer(endpoint) as timer:
             response = self.__session.request(method, url, stream=True, **kwargs)
             timer.tags[metrics.Tag.http_status_code] = response.status_code
-
-        if response.status_code == 429:
-            raise Server429Error()
-
-        if response.status_code >= 500:
-            raise Server5xxError()
 
         if response.status_code != 200:
             raise_for_error(response)
