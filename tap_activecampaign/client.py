@@ -154,7 +154,7 @@ class ActiveCampaignClient(object):
         headers['Api-Token'] = self.__api_token
         headers['Accept'] = 'application/json'
         url = self.base_url
-        response = self.__session.post(
+        response = self.__session.get(
             # Simple endpoint that returns 1 record w/ default organization URN
             url=url,
             headers=headers)
