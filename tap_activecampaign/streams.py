@@ -13,6 +13,11 @@
 #   children: A collection of child endpoints (where the endpoint path includes the parent id)
 #   parent: On each of the children, the singular stream name for parent element
 
+
+
+
+
+
 STREAMS = {
 
   #Reference: https://developers.activecampaign.com/reference#list-all-accounts

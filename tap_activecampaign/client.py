@@ -4,6 +4,10 @@ from requests.exceptions import ConnectionError
 from singer import metrics, utils
 import singer
 
+
+
+
+
 LOGGER = singer.get_logger()
 
 DEFAULT_API_VERSION = '3'
