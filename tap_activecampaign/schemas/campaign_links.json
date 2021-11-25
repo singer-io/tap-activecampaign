@@ -20,7 +20,7 @@
     "tracked": {
       "type": ["null", "integer"]
     },
-    "uniqueclicks": {
+    "uniquelinkclicks": {
       "type": ["null", "integer"]
     },
     "linkclicks": {

@@ -15,7 +15,7 @@
     "last_name": {
       "type": ["null", "string"]
     },
-    "org_id": {
+    "orgid": {
       "type": ["null", "integer"]
     },
     "segmentio_id": {
