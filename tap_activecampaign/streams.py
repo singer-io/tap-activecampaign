@@ -1,3 +1,10 @@
+import singer
+from singer import metrics, metadata, Transformer, utils
+from singer.utils import strptime_to_utc
+from tap_activecampaign.transform import transform_json
+from tap_activecampaign.client import ActiveCampaignClient
+
+LOGGER = singer.get_logger()
 # streams: API URL endpoints to be called
 # properties:
 #   <root node>: Plural stream name for the endpoint
@@ -13,640 +20,1029 @@
 #   children: A collection of child endpoints (where the endpoint path includes the parent id)
 #   parent: On each of the children, the singular stream name for parent element
 
+class ActiveCampaign:
+    """
+    A base class representing singer streams.
+    :param client: The API client used to extract records from external source
+    """
+    
+    stream_name = None
+    replication_method = 'INCREMENTAL'
+    replication_keys = None
+    key_properties = ['id']
+    path = None
+    params = {}
+    parent = None
+    data_key = None
+    created_timestamp = None
+    bookmark_query_field = None
+    links = []
+    children = []
+    
+    def __init__(self, client: ActiveCampaignClient = None):
+        self.client = client
+
+    def write_schema(self, catalog, stream_name):
+        stream = catalog.get_stream(stream_name)
+        schema = stream.schema.to_dict()
+        try:
+            singer.write_schema(stream_name, schema, stream.key_properties)
+        except OSError as err:
+            LOGGER.error('OS Error writing schema for: {}'.format(stream_name))
+            raise err
+        
+    def write_record(self, stream_name, record, time_extracted):
+        try:
+            singer.messages.write_record(stream_name, record, time_extracted=time_extracted)
+        except OSError as err:
+            LOGGER.error('OS Error writing record for: {}'.format(stream_name))
+            LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+            raise err
+        except TypeError as err:
+            LOGGER.error('Type Error writing record for: {}'.format(stream_name))
+            LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+            raise err
+
+    def get_bookmark(self, state, stream, default):
+        if (state is None) or ('bookmarks' not in state):
+            return default
+        return (
+            state
+            .get('bookmarks', {})
+            .get(stream, default)
+        )
+
+
+    def write_bookmark(self, state, stream, value):
+        if 'bookmarks' not in state:
+            state['bookmarks'] = {}
+        state['bookmarks'][stream] = value
+        LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
+        singer.write_state(state)
+
+    def transform_datetime(self, this_dttm):
+        with Transformer() as transformer:
+            new_dttm = transformer._transform_datetime(this_dttm)
+        return new_dttm
+
+    def process_records(self,
+                        catalog, #pylint: disable=too-many-branches
+                        stream_name,
+                        records,
+                        time_extracted,
+                        bookmark_field=None,
+                        max_bookmark_value=None,
+                        last_datetime=None,
+                        parent=None,
+                        parent_id=None):
+        stream = catalog.get_stream(stream_name)
+        schema = stream.schema.to_dict()
+        stream_metadata = metadata.to_map(stream.metadata)
+
+        with metrics.record_counter(stream_name) as counter:
+            for record in records:
+                # If child object, add parent_id to record
+                if parent_id and parent:
+                    record[parent + '_id'] = parent_id
+
+                # Transform record for Singer.io
+                with Transformer() as transformer:
+                    try:
+                        transformed_record = transformer.transform(
+                            record,
+                            schema,
+                            stream_metadata)
+                    except Exception as err:
+                        LOGGER.error('Transformer Error: {}'.format(err))
+                        LOGGER.error('Stream: {}, record: {}'.format(stream_name, record))
+                        raise err
+
+                    # Reset max_bookmark_value to new value if higher
+                    if transformed_record.get(bookmark_field):
+                        if max_bookmark_value is None or \
+                            transformed_record[bookmark_field] > self.transform_datetime(max_bookmark_value):
+                            max_bookmark_value = transformed_record[bookmark_field]
+
+                    if bookmark_field and (bookmark_field in transformed_record):
+                        last_dttm = self.transform_datetime(last_datetime)
+                        bookmark_dttm = self.transform_datetime(transformed_record[bookmark_field])
+                        # Keep only records whose bookmark is after the last_datetime
+                        if bookmark_dttm:
+                            if bookmark_dttm > last_dttm:
+                                self.write_record(stream_name, transformed_record, \
+                                    time_extracted=time_extracted)
+                                counter.increment()
+                    else:
+                        self.write_record(stream_name, transformed_record, time_extracted=time_extracted)
+                        counter.increment()
+
+            return max_bookmark_value, counter.value
+    # Sync a specific parent or child endpoint.
+    def sync(
+            self,
+            client,
+            catalog,
+            state,
+            start_date,
+            path,
+            selected_streams=None,
+            parent=None,
+            parent_id=None):
+
+        static_params = self.params
+        data_key = self.data_key
+        id_fields = self.key_properties
+        bookmark_query_field = self.bookmark_query_field
+        created_timestamp_field = self.created_timestamp
+        bookmark_field = next(iter(self.replication_keys or []), None)
+        # Get the latest bookmark for the stream and set the last_integer/datetime
+        last_datetime = None
+        max_bookmark_value = None
+
+        last_datetime = self.get_bookmark(state, self.stream_name, start_date)
+        max_bookmark_value = last_datetime
+        LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
+            self.stream_name, bookmark_field, last_datetime))
+        now_datetime = utils.now()
+        last_dttm = strptime_to_utc(last_datetime)
+        endpoint_total = 0
+
+        # pagination: loop thru all pages of data
+        # Pagination reference: https://developers.activecampaign.com/reference#pagination
+        # Each page has an offset (starting value) and a limit (batch size, number of records)
+        # Increase the "offset" by the "limit" for each batch.
+        # Continue until the "record_count" returned < "limit" is null/zero or 
+        offset = 0 # Starting offset value for each batch API call
+        limit = 100 # Batch size; Number of records per API call; Max = 100
+        total_records = 0 # Initialize total
+        record_count = limit # Initialize, reset for each API call
+        page = 1
+
+        while offset <= total_records: # break out of loop when record_count < limit (or not data returned)
+            params = {
+                'offset': offset,
+                'limit': limit,
+                **static_params # adds in endpoint specific, sort, filter params
+            }
+
+            if bookmark_query_field:
+                params[bookmark_query_field] = last_datetime
+
+            # Need URL querystring for 1st page; subsequent pages provided by next_url
+            # querystring: Squash query params into string
+            querystring = None
+            querystring = '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
+
+            LOGGER.info('URL for Stream {}: {}{}{}'.format(
+                self.stream_name,
+                self.client.base_url,
+                path,
+                '?{}'.format(querystring) if params else ''))
+
+            # API request data
+            data = {}
+            data = self.client.get(
+                path=path,
+                params=querystring,
+                endpoint=self.stream_name)
+
+            # time_extracted: datetime when the data was extracted from the API
+            time_extracted = utils.now()
+            if not data or data is None or data == {}:
+                break # No data results
+
+            # Transform data with transform_json from transform.py
+            # The data_key identifies the array/list of records below the <root> element
+            # LOGGER.info('data = {}'.format(data)) # TESTING, comment out
+            transformed_data = [] # initialize the record list
+            data_list = []
+            data_dict = {}
+            if data_key in data:
+                if isinstance(data[data_key], list):
+                    transformed_data = transform_json(data, self.stream_name, data_key)
+                elif isinstance(data[data_key], dict):
+                    data_list.append(data[data_key])
+                    data_dict[data_key] = data_list
+                    transformed_data = transform_json(data_dict, self.stream_name, data_key)
+            else: # data_key not in data
+                if isinstance(data, list):
+                    data_list = data
+                    data_dict[data_key] = data_list
+                    transformed_data = transform_json(data_dict, self.stream_name, data_key)
+                elif isinstance(data, dict):
+                    data_list.append(data)
+                    data_dict[data_key] = data_list
+                    transformed_data = transform_json(data_dict, self.stream_name, data_key)
+
+            # LOGGER.info('transformed_data = {}'.format(transformed_data)) # TESTING, comment out
+            if not transformed_data or transformed_data is None:
+                LOGGER.info('No transformed data for data = {}'.format(data))
+                break # No data results
+
+            i = 0
+            for record in transformed_data:
+                # Some endpoints update date is null upon creation
+                if bookmark_field:
+                    created_value = None
+                    if created_timestamp_field:
+                        created_value = record.get(created_timestamp_field)
+                    bookmark_value = record.get(bookmark_field)
+                    if not bookmark_value:
+                        transformed_data[i][bookmark_field] = created_value
+                # Verify key id_fields are present
+                for key in id_fields:
+                    if not record.get(key):
+                        LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
+                            self.stream_name, key, record))
+                        raise RuntimeError
+                i = i + 1
+
+            # Process records and get the max_bookmark_value and record_count for the set of records
+            max_bookmark_value, record_count = self.process_records(
+                catalog=catalog,
+                stream_name=self.stream_name,
+                records=transformed_data,
+                time_extracted=time_extracted,
+                bookmark_field=bookmark_field,
+                max_bookmark_value=max_bookmark_value,
+                last_datetime=last_datetime,
+                parent=parent,
+                parent_id=parent_id)
+            LOGGER.info('Stream {}, batch processed {} records'.format(
+                self.stream_name, record_count))
+            endpoint_total = endpoint_total + record_count
+
+            # Loop thru parent batch records for each children objects (if should stream)
+            children = self.children
+
+            if children:
+                for child_stream_name in children:
+                    if child_stream_name in selected_streams:
+                        LOGGER.info('START Syncing: {}'.format(child_stream_name))
+                        child_stream_obj = STREAMS[child_stream_name](client)
+                        child_stream_obj.write_schema(catalog, child_stream_name)
+                        # For each parent record
+                        for record in transformed_data:
+                            i = 0
+                            # Set parent_id
+                            for id_field in id_fields:
+                                if i == 0:
+                                    parent_id_field = id_field
+                                if id_field == 'id':
+                                    parent_id_field = id_field
+                                i = i + 1
+                            parent_id = record.get(parent_id_field)
+
+                            # sync_endpoint for child
+                            LOGGER.info(
+                                'START Sync for Stream: {}, parent_stream: {}, parent_id: {}'\
+                                    .format(child_stream_name, self.stream_name, parent_id))
+                            child_path = child_stream_obj.path.format(str(parent_id))
+
+                            child_total_records = child_stream_obj.sync(
+                                client=client,
+                                catalog=catalog,
+                                state=state,
+                                start_date=start_date,
+                                path=child_path,
+                                selected_streams=selected_streams,
+                                parent=child_stream_obj.parent,
+                                parent_id=parent_id)
+                            LOGGER.info(
+                                'FINISHED Sync for Stream: {}, parent_id: {}, total_records: {}'\
+                                    .format(child_stream_name, parent_id, child_total_records))
+                            # End transformed data record loop
+                        # End if child in selected streams
+                    # End child streams for parent
+                # End if children
+
+            # Parent record batch
+            # Get pagination details
+            api_total = int(data.get('meta', {}).get('total', 0))
+            if api_total == 0:
+                total_records = record_count
+            else:
+                total_records = api_total
+
+            # to_rec: to record; ending record for the batch page
+            to_rec = offset + limit
+            if to_rec > total_records:
+                to_rec = total_records
+
+            LOGGER.info('Synced Stream: {}, page: {}, {} to {} of total records: {}'.format(
+                self.stream_name,
+                page,
+                offset,
+                to_rec,
+                total_records))
+            # Pagination: increment the offset by the limit (batch-size) and page
+            offset = offset + limit
+            page = page + 1
+            # End page/batch - while next URL loop
+
+        # Update the state with the max_bookmark_value for the endpoint
+        # ActiveCampaign API does not allow page/batch sorting; bookmark written for endpoint
+        if bookmark_field:
+            self.write_bookmark(state, self.stream_name, max_bookmark_value)
+
+        # Return total_records (for all pages and date windows)
+        return endpoint_total
+
+class Accounts(ActiveCampaign):
+    """"
+    Get data for accounts. 
+    Reference : https://developers.activecampaign.com/reference#list-all-accounts
+    """
+    stream_name = 'accounts'
+    replication_keys = ['updated_timestamp']
+    path = 'accounts'
+    data_key = 'accounts'
+    created_timestamp = 'created_timestamp'
+
+class AccountContact(ActiveCampaign):
+    """"
+    Get data for account contact. 
+    Reference : https://developers.activecampaign.com/reference#list-all-associations-1
+    """
+    stream_name = 'account_contacts'
+    replication_keys = ['updated_timestamp']
+    path = 'accountContacts'
+    data_key = 'accountContacts'
+    created_timestamp = 'created_timestamp'
+
+class AccountCustomFields(ActiveCampaign):
+    """"
+    Get data for account custom fields. 
+    Reference : https://developers.activecampaign.com/reference#list-all-custom-fields
+    """
+    stream_name = 'account_custom_fields'
+    replication_keys = ['updated_timestamp']
+    path = 'accountCustomFieldMeta'
+    data_key = 'accountCustomFieldMeta'
+    created_timestamp = 'created_timestamp'
+
+class AccountCustomFieldValues(ActiveCampaign):
+    """"
+    Get data for account custom field values. 
+    Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values-2
+    """
+    stream_name = 'account_custom_field_values'
+    replication_keys = ['updated_timestamp']
+    path = 'accountCustomFieldData'
+    data_key = 'accountCustomFieldData'
+    created_timestamp = 'created_timestamp'
+
+class Addresses(ActiveCampaign):
+    """"
+    Get data for addresses. 
+    Reference : https://developers.activecampaign.com/reference#list-all-addresses
+    """
+    stream_name = 'addresses'
+    replication_method = 'FULL_TABLE'
+    path = 'addresses'
+    data_key = 'addresses'
+    links = ['addressGroup', 'addressList']
+
+class Automations(ActiveCampaign):
+    """"
+    Get data for automations. 
+    Reference : https://developers.activecampaign.com/reference#list-all-automations
+    """
+    stream_name = 'automations'
+    replication_keys = ['mdate']
+    path = 'automations'
+    data_key = 'automations'
+    created_timestamp = 'cdate'
+    links = ['contactGoals', 'blocks']
+
+class Brandings(ActiveCampaign):
+    """"
+    Get data for brandings. 
+    Reference : https://developers.activecampaign.com/reference#brandings
+    """
+    stream_name = 'brandings'
+    replication_method = 'FULL_TABLE'
+    path = 'brandings'
+    data_key = 'brandings'
+
+class Calendars(ActiveCampaign):
+    """"
+    Get data for calendars. 
+    Reference : https://developers.activecampaign.com/reference#list-all-calendar-feeds
+    """
+    stream_name = 'calendars'
+    replication_keys = ['mdate']
+    path = 'calendars'
+    data_key = 'calendars'
+    created_timestamp = 'cdate'
+    links = ['calendarRels', 'calendarUsers']
+
+class Campaigns(ActiveCampaign):
+    """"
+    Get data for campaigns. 
+    Reference : https://developers.activecampaign.com/reference#list-all-campaigns
+    """
+    stream_name = 'campaigns'
+    replication_keys = ['updated_timestamp']
+    path = 'campaigns'
+    data_key = 'campaigns'
+    created_timestamp = 'created_timestamp'
+
+class CampaignLinks(ActiveCampaign):
+    """"
+    Get data for campaign_links. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-links-associated-campaign
+    """
+    stream_name = 'campaign_links'
+    replication_keys = ['updated_timestamp']
+    path = 'links'
+    data_key = 'links'
+    created_timestamp = 'created_timestamp'
+
+class Contacts(ActiveCampaign):
+    """"
+    Get data for contacts. 
+    Reference : https://developers.activecampaign.com/reference#list-all-contacts
+    """
+    stream_name = 'contacts'
+    replication_keys = ['updated_timestamp']
+    path = 'contacts'
+    data_key = 'contacts'
+    created_timestamp = 'created_timestamp'
+    bookmark_query_field = 'filters[updated_after]'
+    links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+
+class ContactAutomations(ActiveCampaign):
+    """"
+    Get data for contactAutomations. 
+    Reference : https://developers.activecampaign.com/reference#list-all-contact-automations
+    """
+    stream_name = 'contact_automations'
+    replication_keys = ['lastdate']
+    path = 'contactAutomations'
+    data_key = 'contactAutomations'
+    created_timestamp = 'adddate'
+
+class ContactCustomFields(ActiveCampaign):
+    """"
+    Get data for contact_custom_fields. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
+    """
+    stream_name = 'contact_custom_fields'
+    replication_method = 'FULL_TABLE'
+    path = 'fields'
+    data_key = 'fields'
+
+class ContactCustomFieldOptions(ActiveCampaign):
+    """"
+    Get data for contact_custom_field_options. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
+    """
+    stream_name = 'contact_custom_field_options'
+    replication_method = 'FULL_TABLE'
+    path = 'fields'
+    data_key = 'fieldOptions'
+
+class ContactCustomFieldRels(ActiveCampaign):
+    """"
+    Get data for contact_custom_field_rels. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
+    """
+    stream_name = 'contact_custom_field_rels'
+    replication_method = 'FULL_TABLE'
+    path = 'fields'
+    data_key = 'fieldRels'
+
+class ContactCustomFieldValues(ActiveCampaign):
+    """"
+    Get data for contact_custom_field_values. 
+    Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values-1
+    """
+    stream_name = 'contact_custom_field_values'
+    replication_keys = ['udate']
+    path = 'fieldValues'
+    data_key = 'fieldValues'
+    created_timestamp = 'cdate'
+
+class ContactDeals(ActiveCampaign):
+    """"
+    Get data for contact_deals. 
+    Reference : https://developers.activecampaign.com/reference#list-all-secondary-contacts
+    """
+    stream_name = 'contact_deals'
+    replication_keys = ['updated_timestamp']
+    path = 'contactDeals'
+    data_key = 'contactDeals'
+    created_timestamp = 'created_timestamp'
+
+class DealStages(ActiveCampaign):
+    """"
+    Get data for deal_stages. 
+    Reference : https://developers.activecampaign.com/reference#list-all-deal-stages
+    """
+    stream_name = 'deal_stages'
+    replication_keys = ['udate']
+    path = 'dealStages'
+    data_key = 'dealStages'
+    created_timestamp = 'cdate'
+    
+class DealGroups(ActiveCampaign):
+    """"
+    Get data for deal_groups. 
+    Reference : https://developers.activecampaign.com/reference#list-all-pipelines
+    Also known as: pipelines
+    """
+    stream_name = 'deal_groups'
+    replication_keys = ['udate']
+    path = 'dealGroups'
+    data_key = 'dealGroups'
+    created_timestamp = 'cdate'
+    links = ['dealGroupGroups']
+
+class DealCustomFields(ActiveCampaign):
+    """"
+    Get data for deal_custom_fields. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-all-dealcustomfielddata-resources
+    """
+    stream_name = 'deal_custom_fields'
+    replication_keys = ['updated_timestamp']
+    path = 'dealCustomFieldMeta'
+    data_key = 'dealCustomFieldMeta'
+    created_timestamp = 'created_timestamp'
+
+class DealCustomFieldValues(ActiveCampaign):
+    """"
+    Get data for deal_custom_field_values. 
+    Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values
+    """
+    stream_name = 'deal_custom_field_values'
+    replication_keys = ['updated_timestamp']
+    path = 'dealCustomFieldData'
+    data_key = 'dealCustomFieldData'
+    created_timestamp = 'created_timestamp'
+    
+class Deals(ActiveCampaign):
+    """"
+    Get data for deals. 
+    Reference : https://developers.activecampaign.com/reference#list-all-deals
+    """
+    stream_name = 'deals'
+    replication_keys = ['mdate']
+    path = 'deals'
+    data_key = 'deals'
+    created_timestamp = 'cdate'
+
+class EcommerceConnections(ActiveCampaign):
+    """"
+    Get data for ecommerce_connections. 
+    Reference : https://developers.activecampaign.com/reference#list-all-connections
+    """
+    stream_name = 'ecommerce_connections'
+    
+    replication_keys = ['udate']
+    path = 'connections'
+    data_key = 'connections'
+    created_timestamp = 'cdate'
+    
+class EcommerceCustomers(ActiveCampaign):
+    """"
+    Get data for ecommerce_customers. 
+    Reference : https://developers.activecampaign.com/reference#list-all-customers
+    """
+    stream_name = 'ecommerce_customers'
+    replication_keys = ['tstamp']
+    path = 'ecomCustomers'
+    data_key = 'ecomCustomers'
+
+class EcommerceOrders(ActiveCampaign):
+    """"
+    Get data for ecommerce orders. 
+    Reference : https://developers.activecampaign.com/reference#list-all-customers
+    """
+    stream_name = 'ecommerce_orders'
+    replication_keys = ['updated_date']
+    path = 'ecomOrders'
+    data_key = 'ecomOrders'
+    created_timestamp = 'created_timestamp'
+    links= ['orderDiscounts']
+    children= ['ecommerce_order_products']
+
+class EcommerceOrderProducts(ActiveCampaign):
+    """"
+    Get data for ecommerce order products. 
+    Reference : https://developers.activecampaign.com/reference#list-products-for-order
+    """
+    stream_name = 'ecommerce_order_products'
+    replication_method = 'FULL_TABLE'
+    path = 'ecomOrders/{}/orderProducts'
+    data_key = 'ecomOrderProducts'
+    parent = 'ecommerce_orders'
+
+class Forms(ActiveCampaign):
+    """"
+    Get data for forms. 
+    Reference : https://developers.activecampaign.com/reference#forms-1
+    """
+    stream_name = 'forms'
+    replication_keys = ['udate']
+    path = 'forms'
+    data_key = 'forms'
+    created_timestamp = 'cdate'
+
+class Groups(ActiveCampaign):
+    """"
+    Get data for groups. 
+    Reference : https://developers.activecampaign.com/reference#list-all-groups
+    """
+    stream_name = 'groups'
+    replication_method = 'FULL_TABLE'
+    path = 'groups'
+    data_key = 'groups'
+    
+class Lists(ActiveCampaign):
+    """"
+    Get data for lists. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-all-lists
+    """
+    stream_name = 'lists'
+    replication_keys = ['updated_timestamp']
+    path = 'lists'
+    data_key = 'lists'
+    created_timestamp = 'created_timestamp'
+    links =  ['addressLists', 'contactGoalLists']
+
+class Messages(ActiveCampaign):
+    """"
+    Get data for messages. 
+    Reference : https://developers.activecampaign.com/reference#list-all-messages
+    """
+    stream_name = 'messages'
+    replication_keys = ['mdate']
+    path = 'messages'
+    data_key = 'messages'
+    created_timestamp = 'cdate'
+
+class SavedResponses(ActiveCampaign):
+    """"
+    Get data for saved_responses. 
+    Reference : https://developers.activecampaign.com/reference#list-all-saved-responses
+    """
+    stream_name = 'saved_responses'
+    replication_keys = ['mdate']
+    path = 'savedResponses'
+    data_key = 'savedResponses'
+    created_timestamp = 'cdate' 
+
+class Scores(ActiveCampaign):
+    """"
+    Get data for scores. 
+    Reference : https://developers.activecampaign.com/reference#retrieve-a-score
+    """
+    stream_name = 'scores'
+    replication_keys = ['mdate']
+    path = 'scores'
+    data_key = 'scores'
+    created_timestamp = 'cdate' 
+
+class Segments(ActiveCampaign):
+    """"
+    Get data for segments. 
+    Reference : https://developers.activecampaign.com/reference#list-all-segments
+    """
+    stream_name = 'segments'
+    replication_method = 'FULL_TABLE'
+    path = 'segments'
+    data_key = 'segments'
+
+class Tags(ActiveCampaign):
+    """"
+    Get data for tags. 
+    Reference : https://developers.activecampaign.com/reference#list-all-tags
+    """
+    stream_name = 'tags'
+    replication_method = 'FULL_TABLE'
+    path = 'tags'
+    data_key = 'tags'
+
+class TaskTypes(ActiveCampaign):
+    """"
+    Get data for task_types. 
+    Reference : https://developers.activecampaign.com/reference#list-all-deal-task-types
+    """
+    stream_name = 'task_types'
+    replication_method = 'FULL_TABLE'
+    path = 'dealTasktypes'
+    data_key = 'dealTasktypes'
+
+class Tasks(ActiveCampaign):
+    """"
+    Get data for tasks. 
+    Reference : https://developers.activecampaign.com/reference#list-all-tasks
+    """
+    stream_name = 'tasks'
+    replication_keys = ['udate']
+    path = 'dealTasks'
+    data_key = 'dealTasks'
+    created_timestamp = 'cdate'
+    links= ['activities', 'taskNotifications']
+
+class Templates(ActiveCampaign):
+    """"
+    Get data for templates. 
+    Reference : https://developers.activecampaign.com/reference#templates
+    """
+    stream_name = 'templates'
+    replication_keys = ['mdate']
+    path = 'templates'
+    data_key = 'templates'
+
+class Users(ActiveCampaign):
+    """"
+    Get data for users. 
+    Reference : https://developers.activecampaign.com/reference#users
+    """
+    stream_name = 'users'
+    replication_method = 'FULL_TABLE'
+    path = 'users'
+    data_key = 'users'
+
+class Webhooks(ActiveCampaign):
+    """"
+    Get data for webhooks. 
+    Reference : https://developers.activecampaign.com/reference#webhooks
+    """
+    stream_name = 'webhooks'
+    replication_method = 'FULL_TABLE'
+    path = 'webhooks'
+    data_key = 'webhooks'
+
+#Undocumented Endpoints
+
+class Activities(ActiveCampaign):
+    """"
+    Get data for activities. 
+    """
+    stream_name = 'activities'
+    replication_keys = ['tstamp']
+    path = 'activities'
+    data_key = 'activities'
+
+class AutomationBlocks(ActiveCampaign):
+    """"
+    Get data for automation_blocks. 
+    """
+    stream_name = 'automation_blocks'
+    replication_keys = ['mdate']
+    path = 'automationBlocks'
+    data_key = 'automationBlocks'
+    created_timestamp = 'cdate'
+
+class BounceLogs(ActiveCampaign):
+    """"
+    Get data for bounce_logs. 
+    """
+    stream_name = 'bounce_logs'
+    replication_keys = ['updated_timestamp']
+    path = 'bounceLogs'
+    data_key = 'bounceLogs'
+    created_timestamp = 'created_timestamp'
+
+class CampaignLists(ActiveCampaign):
+    """"
+    Get data for campaign_lists. 
+    """
+    stream_name = 'campaign_lists'
+    replication_method = 'FULL_TABLE'
+    path = 'campaignLists'
+    data_key = 'campaignLists'
+
+class CampaignMessages(ActiveCampaign):
+    """"
+    Get data for campaign_messages. 
+    """
+    stream_name = 'campaign_messages'
+    replication_method = 'FULL_TABLE'
+    path = 'campaignMessages'
+    data_key = 'campaignMessages'
+    
+class Configs(ActiveCampaign):
+    """"
+    Get data for configs. 
+    """
+    stream_name = 'configs'
+    replication_keys = ['updated_timestamp']
+    path = 'configs'
+    data_key = 'configs'
+    created_timestamp = 'created_timestamp'
+
+class ContactData(ActiveCampaign):
+    """"
+    Get data for contact_data. 
+    """
+    stream_name = 'contact_data'
+    replication_keys = ['tstamp']
+    path = 'contactData'
+    data_key = 'contactData'
+
+class ContactEmails(ActiveCampaign):
+    """"
+    Get data for contact_emails. 
+    """
+    stream_name = 'contact_emails'
+    replication_keys = ['sdate']
+    path = 'contactEmails'
+    data_key = 'contactEmails'
+
+
+class ContactLists(ActiveCampaign):
+    """"
+    Get data for contact_lists. 
+    """
+    stream_name = 'contact_lists'
+    replication_keys = ['updated_timestamp']
+    path = 'contactLists'
+    data_key = 'contactLists'
+    created_timestamp = 'created_timestamp'
+
+class ContactTags(ActiveCampaign):
+    """"
+    Get data for contact_tags. 
+    """
+    stream_name = 'contact_tags'
+    replication_keys = ['updated_timestamp']
+    path = 'contactTags'
+    data_key = 'contactTags'
+    created_timestamp = 'created_timestamp'
+
+class ContactConversions(ActiveCampaign):
+    """"
+    Get data for contact_conversions. 
+    """
+    stream_name = 'contact_conversions'
+    replication_keys = ['cdate']
+    path = 'contactConversions'
+    data_key = 'contactConversions'
+
+class Conversions(ActiveCampaign):
+    """"
+    Get data for conversions. 
+    """
+    stream_name = 'conversions'
+    replication_keys = ['udate']
+    path = 'conversions'
+    data_key = 'conversions'
+    created_timestamp = 'cdate'
+    links= ['contactConversions']
+ 
+class ConversionTriggers(ActiveCampaign):
+    """"
+    Get data for conversion_triggers. 
+    """
+    stream_name = 'conversion_triggers'
+    replication_keys = ['udate']
+    path = 'conversionTriggers'
+    data_key = 'conversionTriggers'
+    created_timestamp = 'cdate'
+
+class DealActivities(ActiveCampaign):
+    """"
+    Get data for deal_activities. 
+    """
+    stream_name = 'deal_activities'
+    replication_keys = ['cdate']
+    path = 'dealActivities'
+    data_key = 'dealActivities'
+
+class DealGroupUsers(ActiveCampaign):
+    """"
+    Get data for deal_group_users. 
+    """
+    stream_name = 'deal_group_users'
+    replication_method = 'FULL_TABLE'
+    path = 'dealGroupUsers'
+    data_key = 'dealGroupUsers'
+
+class EcommerceOrderActivities(ActiveCampaign):
+    """"
+    Get data for ecommerce_order_activities. 
+    """
+    stream_name = 'ecommerce_order_activities'
+    replication_keys = ['updated_date']
+    path = 'ecomOrderActivities'
+    data_key = 'ecomOrderActivities'
+    created_timestamp= 'created_date',
+
+class EmailActivities(ActiveCampaign):
+    """"
+    Get data for email_activities. 
+    """
+    stream_name = 'email_activities'
+    replication_keys = ['tstamp']
+    path = 'emailActivities'
+    data_key = 'emailActivities'
+
+class Goals(ActiveCampaign):
+    """"
+    Get data for goals. 
+    """
+    stream_name = 'goals'
+    replication_method = 'FULL_TABLE'
+    path = 'goals'
+    data_key = 'goals'
+
+class SiteMessages(ActiveCampaign):
+    """"
+    Get data for site_messages. 
+    """
+    stream_name = 'site_messages'
+    replication_keys = ['ldate']
+    path = 'siteMessages'
+    data_key = 'siteMessages'
+
+class Sms(ActiveCampaign):
+    """"
+    Get data for sms. 
+    """
+    stream_name = 'sms'
+    replication_keys = ['tstamp']
+    path = 'sms'
+    data_key = 'sms'
+
 STREAMS = {
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-accounts
-    'accounts': {
-      'path': 'accounts',
-      'data_key': 'accounts',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-associations-1
-    'account_contacts': {
-      'path': 'accountContacts',
-      'data_key': 'accountContacts',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-custom-fields
-    'account_custom_fields': {
-      'path': 'accountCustomFieldMeta',
-      'data_key': 'accountCustomFieldMeta',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-custom-field-values-2
-    'account_custom_field_values': {
-      'path': 'accountCustomFieldData',
-      'data_key': 'accountCustomFieldData',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-addresses
-    'addresses': {
-      'path': 'addresses',
-      'data_key': 'addresses',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': ['addressGroup', 'addressList']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-automations
-    'automations': {
-      'path': 'automations',
-      'data_key': 'automations',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': ['contactGoals', 'blocks']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#brandings
-    'brandings': {
-      'path': 'brandings',
-      'data_key': 'brandings',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-calendar-feeds
-    'calendars': {
-      'path': 'calendars',
-      'data_key': 'calendars',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': ['calendarRels', 'calendarUsers']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-campaigns
-    'campaigns': {
-      'path': 'campaigns',
-      'data_key': 'campaigns',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-links-associated-campaign
-    'campaign_links': {
-      'path': 'links',
-      'data_key': 'links',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-contacts
-    'contacts': {
-      'path': 'contacts',
-      'data_key': 'contacts',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'bookmark_query_field': 'filters[updated_after]',
-      'links': [
-        'contactGoals', 'contactLogs', 'geoIps', 'trackingLogs'
-      ]
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-contact-automations
-    'contact_automations': {
-      'path': 'contactAutomations',
-      'data_key': 'contactAutomations',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['lastdate'],
-      'created_timestamp': 'adddate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-fields-1
-    'contact_custom_fields': {
-      'path': 'fields',
-      'data_key': 'fields',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-fields-1
-    'contact_custom_field_options': {
-      'path': 'fields',
-      'data_key': 'fieldOptions',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-fields-1
-    'contact_custom_field_rels': {
-      'path': 'fields',
-      'data_key': 'fieldRels',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-custom-field-values-1
-    'contact_custom_field_values': {
-      'path': 'fieldValues',
-      'data_key': 'fieldValues',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-secondary-contacts
-    'contact_deals': {
-      'path': 'contactDeals',
-      'data_key': 'contactDeals',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-deal-stages
-    'deal_stages': {
-      'path': 'dealStages',
-      'data_key': 'dealStages',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-pipelines
-    #Also known as: pipelines
-    'deal_groups': {
-      'path': 'dealGroups',
-      'data_key': 'dealGroups',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': ['dealGroupGroups']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-all-dealcustomfielddata-resources
-    'deal_custom_fields': {
-      'path': 'dealCustomFieldMeta',
-      'data_key': 'dealCustomFieldMeta',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-custom-field-values
-    'deal_custom_field_values': {
-      'path': 'dealCustomFieldData',
-      'data_key': 'dealCustomFieldData',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-deals
-    'deals': {
-      'path': 'deals',
-      'data_key': 'deals',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-connections
-    'ecommerce_connections': {
-      'path': 'connections',
-      'data_key': 'connections',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-customers
-    'ecommerce_customers': {
-      'path': 'ecomCustomers',
-      'data_key': 'ecomCustomers',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['tstamp'],
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-customers
-    'ecommerce_orders': {
-      'path': 'ecomOrders',
-      'data_key': 'ecomOrders',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_date'],
-      'created_timestamp': 'created_date',
-      'params': {},
-      'links': ['orderDiscounts'],
-      'children': {
-        #Reference: https://developers.activecampaign.com/reference#list-products-for-order
-          'ecommerce_order_products': {
-            'path': 'ecomOrders/{}/orderProducts',
-            'data_key': 'ecomOrderProducts',
-            'key_properties': ['id'],
-            'replication_method': 'FULL_TABLE',
-            'links': []
-          }
-      }
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#forms-1
-    'forms': {
-      'path': 'forms',
-      'data_key': 'forms',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-groups
-    'groups': {
-      'path': 'groups',
-      'data_key': 'groups',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-all-lists
-    'lists': {
-      'path': 'lists',
-      'data_key': 'lists',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': ['addressLists', 'contactGoalLists']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-messages
-    'messages': {
-      'path': 'messages',
-      'data_key': 'messages',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-saved-responses
-    'saved_responses': {
-      'path': 'savedResponses',
-      'data_key': 'savedResponses',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-a-score
-    'scores': {
-      'path': 'scores',
-      'data_key': 'scores',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-segments
-    'segments': {
-      'path': 'segments',
-      'data_key': 'segments',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#retrieve-all-tags
-    'tags': {
-      'path': 'tags',
-      'data_key': 'tags',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': ['contactGoalTags']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-deal-task-types
-    'task_types': {
-      'path': 'dealTasktypes',
-      'data_key': 'dealTasktypes',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-tasks
-    'tasks': {
-      'path': 'dealTasks',
-      'data_key': 'dealTasks',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': ['activities', 'taskNotifications']
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#templates
-    'templates': {
-      'path': 'templates',
-      'data_key': 'templates',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#list-all-users
-    'users': {
-      'path': 'users',
-      'data_key': 'users',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Reference: https://developers.activecampaign.com/reference#get-a-list-of-webhooks
-    'webhooks': {
-      'path': 'webhooks',
-      'data_key': 'webhooks',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-  #Undocumented Endpoints
-    'activities': {
-      'path': 'activities',
-      'data_key': 'activities',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['tstamp'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'automation_blocks': {
-      'path': 'automationBlocks',
-      'data_key': 'automationBlocks',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['mdate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-    'bounce_logs': {
-      'path': 'bounceLogs',
-      'data_key': 'bounceLogs',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-    'campaign_lists': {
-      'path': 'campaignLists',
-      'data_key': 'campaignLists',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-    'campaign_messages': {
-      'path': 'campaignMessages',
-      'data_key': 'campaignMessages',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-    'configs': {
-      'path': 'configs',
-      'data_key': 'configs',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-    'contact_data': {
-      'path': 'contactData',
-      'data_key': 'contactData',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['tstamp'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'contact_emails': {
-      'path': 'contactEmails',
-      'data_key': 'contactEmails',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['sdate'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'contact_lists': {
-      'path': 'contactLists',
-      'data_key': 'contactLists',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-    'contact_tags': {
-      'path': 'contactTags',
-      'data_key': 'contactTags',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_timestamp'],
-      'created_timestamp': 'created_timestamp',
-      'links': []
-    },
-
-    'contact_conversions': {
-      'path': 'contactConversions',
-      'data_key': 'contactConversions',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['cdate'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'conversions': {
-      'path': 'conversions',
-      'data_key': 'conversions',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-    'conversions': {
-      'path': 'conversions',
-      'data_key': 'conversions',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': ['contactConversions']
-    },
-
-    'conversion_triggers': {
-      'path': 'conversionTriggers',
-      'data_key': 'conversionTriggers',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['udate'],
-      'created_timestamp': 'cdate',
-      'links': []
-    },
-
-    'deal_activities': {
-      'path': 'dealActivities',
-      'data_key': 'dealActivities',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['cdate'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'deal_group_users': {
-      'path': 'dealGroupUsers',
-      'data_key': 'dealGroupUsers',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': []
-    },
-
-    'ecommerce_order_activities': {
-      'path': 'ecomOrderActivities',
-      'data_key': 'ecomOrderActivities',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['updated_date'],
-      'created_timestamp': 'created_date',
-      'links': []
-    },
-
-    'email_activities': {
-      'path': 'emailActivities',
-      'data_key': 'emailActivities',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['tstamp'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'goals': {
-      'path': 'goals',
-      'data_key': 'goals',
-      'key_properties': ['id'],
-      'replication_method': 'FULL_TABLE',
-      'links': ['contactGoals']
-    },
-
-    'site_messages': {
-      'path': 'siteMessages',
-      'data_key': 'siteMessages',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['ldate'],
-      'created_timestamp': None,
-      'links': []
-    },
-
-    'sms': {
-      'path': 'sms',
-      'data_key': 'sms',
-      'key_properties': ['id'],
-      'replication_method': 'INCREMENTAL',
-      'replication_keys': ['tstamp'],
-      'created_timestamp': None,
-      'links': []
-    },
-
+  'accounts': Accounts,
+  'account_contacts': AccountContact,
+  'account_custom_fields': AccountCustomFields,
+  'account_custom_field_values': AccountCustomFieldValues,
+  'addresses': Addresses,
+  'automations': Automations,
+  'brandings': Brandings,
+  'calendars': Calendars,
+  'campaigns': Campaigns,
+  'campaign_links': CampaignLinks,
+  'contacts': Contacts,
+  'contact_automations': ContactAutomations,
+  'contact_custom_fields': ContactCustomFields,
+  'contact_custom_field_options': ContactCustomFieldOptions,
+  'contact_custom_field_rels': ContactCustomFieldRels,
+  'contact_custom_field_values': ContactCustomFieldValues,
+  'contact_deals': ContactDeals,
+  'deal_stages': DealStages,
+  'deal_groups': DealGroups,
+  'deal_custom_fields': DealCustomFields,
+  'deal_custom_field_values': DealCustomFieldValues,
+  'deals': Deals,
+  'ecommerce_connections': EcommerceConnections,
+  'ecommerce_customers': EcommerceCustomers,
+  'ecommerce_orders': EcommerceOrders,
+  'ecommerce_order_products': EcommerceOrderProducts,
+  'forms': Forms,
+  'groups': Groups,
+  'lists': Lists,
+  'messages': Messages,
+  'saved_responses': SavedResponses,
+  'scores': Scores,
+  'segments': Segments,
+  'tags': Tags,
+  'task_types': TaskTypes,
+  'tasks': Tasks,
+  'templates': Templates,
+  'users': Users,
+  'webhooks': Webhooks,
+  'activities': Activities,
+  'automation_blocks': AutomationBlocks,
+  'bounce_logs': BounceLogs,
+  'campaign_lists': CampaignLists,
+  'campaign_messages': CampaignMessages,
+  'configs': Configs,
+  'contact_data': ContactData,
+  'contact_emails': ContactEmails,
+  'contact_lists': ContactLists,
+  'contact_tags': ContactTags,
+  'contact_conversions': ContactConversions,
+  'conversions': Conversions,
+  'conversion_triggers': ConversionTriggers,
+  'deal_activities': DealActivities,
+  'deal_group_users': DealGroupUsers,
+  'ecommerce_order_activities': EcommerceOrderActivities,
+  'email_activities': EmailActivities,
+  'goals': Goals,
+  'site_messages': SiteMessages,
+  'sms': Sms
 }
 
+SUB_STREAMS = {
+    'ecommerce_order_products'
+}
 
 def flatten_streams():
     flat_streams = {}
-    # Loop through parents
-    for stream_name, endpoint_config in STREAMS.items():
-        flat_streams[stream_name] = {
-            'key_properties': endpoint_config.get('key_properties'),
-            'replication_method': endpoint_config.get('replication_method'),
-            'replication_keys': endpoint_config.get('replication_keys')
+    # Loop through all streams
+    for stream in STREAMS.values():
+      stream = stream()
+      flat_streams[stream.stream_name] = {
+            'key_properties': stream.key_properties,
+            'replication_method': stream.replication_method,
+            'replication_keys': stream.replication_keys
         }
-        # Loop through children
-        children = endpoint_config.get('children')
-        if children:
-            for child_stream_name, child_enpoint_config in children.items():
-                flat_streams[child_stream_name] = {
-                    'key_properties': child_enpoint_config.get('key_properties'),
-                    'replication_method': child_enpoint_config.get('replication_method'),
-                    'replication_keys': child_enpoint_config.get('replication_keys')
-                }
+
     return flat_streams
