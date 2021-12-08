@@ -22,6 +22,13 @@ class ActiveCampaignPagination(ActiveCampaignTest):
         # Streams to verify all fields tests
         expected_streams = self.expected_check_streams()
 
+        # We are not able to generate enough data to test pagination for following below streams,
+        # `brandings`, `configs`, `site_messages`, `bounce_logs`, `conversions`, `conversion_triggers`, `goals`, `contact_conversions`, `sms`, `user`.
+        # For `user` stream it allow only 25 users in current plan. 
+        # So, removing it all from expected_streams set.
+        expected_streams = expected_streams - {'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'site_messages',
+                                                'bounce_logs', 'conversions', 'conversion_triggers', 'goals'}
+
         conn_id = connections.ensure_connection(self)
 
         found_catalogs = self.run_and_verify_check_mode(conn_id)

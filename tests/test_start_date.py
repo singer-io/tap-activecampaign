@@ -24,12 +24,27 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
         • verify that each stream has less records than the earlier start date sync
         • verify all data from later start data has bookmark values >= start_date
         """
+        # Streams to verify start date tests
+        expected_streams = self.expected_check_streams()
+
+        # We are not able to generate data for `contact_conversions`stream. 
+        # For `sms` stream it requires Professional plan of account. So, removing it from streams_to_test set.
+        expected_streams = expected_streams - {'contact_conversions', 'sms'}
+
+        stream_to_test_1 = {'scores', 'contact_data', 'forms', 'templates'}
+        self.run_test(days=4, expected_streams= stream_to_test_1)
+
+        stream_to_test_2 = {'conversions', 'conversion_triggers', 'goals', 'site_messages'}
+        self.run_test(days=6, expected_streams= stream_to_test_2)
+        
+        expected_streams = expected_streams - stream_to_test_2 - stream_to_test_1
+        self.run_test(days=2, expected_streams=expected_streams)
+        
+    def run_test(self, days, expected_streams):
         self.start_date_1 = self.get_properties().get('start_date')
-        self.start_date_2 = self.timedelta_formatted(self.start_date_1, days=13)
+        self.start_date_2 = self.timedelta_formatted(self.start_date_1, days=days)
         self.start_date = self.start_date_1
 
-        expected_streams = self.expected_check_streams()
-        
         ##########################################################################
         # First Sync
         ##########################################################################
@@ -132,7 +147,6 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
                             "Sync start_date: {}\n".format(self.start_date_2) +
                                 "Record date: {} ".format(replication_date)
                         )
-
                     # Verify the number of records replicated in sync 1 is greater than the number
                     # of records replicated in sync 2
                     self.assertGreater(record_count_sync_1,
@@ -141,7 +155,6 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
                     # Verify the records replicated in sync 2 were also replicated in sync 1
                     self.assertTrue(
                         primary_keys_sync_2.issubset(primary_keys_sync_1))
-
                 else:
                     
                     # Verify that the 2nd sync with a later start date replicates the same number of

@@ -25,7 +25,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
 
     def test_run(self):
         streams_to_test = self.expected_check_streams()
-   
+
         conn_id = connections.ensure_connection(self, payload_hook=None)
 
         # Verify that there are catalogs found

@@ -42,7 +42,7 @@ class ActiveCampaignTest(unittest.TestCase):
 
     def get_properties(self, original: bool = True):
         return_value = {
-            "start_date" : "2021-11-10T00:00:00Z",
+            "start_date" : "2021-12-01T00:00:00Z",
         }
         if original:
             return return_value
@@ -337,12 +337,6 @@ class ActiveCampaignTest(unittest.TestCase):
                 self.PRIMARY_KEYS: {'id'},
                 self.REPLICATION_METHOD: self.INCREMENTAL,
                 self.REPLICATION_KEYS: {'cdate'},
-                self.OBEYS_START_DATE: True
-            },
-            'conversions': {
-                self.PRIMARY_KEYS: {'id'},
-                self.REPLICATION_METHOD: self.INCREMENTAL,
-                self.REPLICATION_KEYS: {'udate'},
                 self.OBEYS_START_DATE: True
             },
             'conversions': {
