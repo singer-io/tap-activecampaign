@@ -21,7 +21,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
         expected_streams = self.expected_check_streams()
 
         # We are not able to generate data for `contact_conversions` stream. 
-        # For `sms` stream it requires Professional plan of account. So, removing it from expected_streams set.
+        # For `sms` stream it requires Enterprise plan of account. So, removing it from expected_streams set.
         expected_streams = expected_streams - {'contact_conversions', 'sms'}
         
         expected_automatic_fields = self.expected_automatic_fields()

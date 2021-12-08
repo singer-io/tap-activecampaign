@@ -22,12 +22,11 @@ class ActiveCampaignPagination(ActiveCampaignTest):
         # Streams to verify all fields tests
         expected_streams = self.expected_check_streams()
 
-        # We are not able to generate enough data to test pagination for following below streams,
-        # `brandings`, `configs`, `site_messages`, `bounce_logs`, `conversions`, `conversion_triggers`, `goals`, `contact_conversions`, `sms`, `user`.
-        # For `user` stream it allow only 25 users in current plan. 
+        # We are not able to generate enough data to test pagination for below streams,
+        # `brandings`, `configs`, `conversions`, `conversion_triggers`, `goals`, `contact_conversions`, `sms`, `user`.
+        # The current plan allows only 25 users. So, skipped `user` stream. sms feature is not supported for the current plan.
         # So, removing it all from expected_streams set.
-        expected_streams = expected_streams - {'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'site_messages',
-                                                'bounce_logs', 'conversions', 'conversion_triggers', 'goals'}
+        expected_streams = expected_streams - {'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals'}
 
         conn_id = connections.ensure_connection(self)
 

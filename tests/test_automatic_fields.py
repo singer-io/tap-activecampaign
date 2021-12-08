@@ -21,7 +21,7 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
         streams_to_test = self.expected_check_streams()
 
         # We are not able to generate data for `contact_conversions` stream.
-        # For `sms` it requires Professional plan of account. So, removing it from streams_to_test set.
+        # For `sms` it requires Enterprise plan of account. So, removing it from streams_to_test set.
         streams_to_test = streams_to_test - {'contact_conversions', 'sms'}
         
         conn_id = connections.ensure_connection(self)
