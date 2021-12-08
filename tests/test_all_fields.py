@@ -19,10 +19,11 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
         
         # Streams to verify all fields tests
         expected_streams = self.expected_check_streams()
-                
-        # Skip following below streams as there is no data available.
-        expected_streams = expected_streams - {'sms', 'contact_conversions', 'contact_emails', 'email_activities', 'site_messages',
-                                             'contact_data', 'contact_automations', 'bounce_logs'}
+
+        # We are not able to generate data for `contact_conversions` stream. 
+        # For `sms` stream it requires Professional plan of account. So, removing it from streams_to_test set.
+        expected_streams = expected_streams - {'contact_conversions', 'sms'}
+        
         expected_automatic_fields = self.expected_automatic_fields()
         conn_id = connections.ensure_connection(self)
 
@@ -55,6 +56,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
         synced_stream_names = set(synced_records.keys())
         self.assertSetEqual(expected_streams, synced_stream_names)
         
+        
         for stream in expected_streams:
             with self.subTest(stream=stream):
 
@@ -74,7 +76,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
                     if message['action'] == 'upsert':
                         actual_all_keys.update(message['data'].keys())
 
-                # As we can't generate following field by activecampaign APIs and UI, so skipped.
+                # As we can't generate following field by activecampaign APIs and UI, so removed it form expectation list.
                 if stream == "ecommerce_orders":
                     expected_all_keys = expected_all_keys - {'order_products'}
                     
