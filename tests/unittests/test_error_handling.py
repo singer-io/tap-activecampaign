@@ -57,6 +57,12 @@ def mock_send_429(*args, **kwargs):
 def mock_send_500(*args, **kwargs):
     return Mockresponse("", 500, raise_error=True)
 
+def mock_send_501(*args, **kwargs):
+    return Mockresponse("", 501, raise_error=True)
+
+def mock_send_502(*args, **kwargs):
+    return Mockresponse("", 502, raise_error=True)
+
 class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
     """
     Test error handling for `request` method
@@ -136,7 +142,7 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
     @patch("requests.Session.request", side_effect=mock_send_429)
     def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_api_token, mock_sleep):
         """
-        Test that `request` method raise 429 error with proper message and retry it 5 times
+        Test that `request` method raise 429 error with proper message
         """
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
         try:
@@ -146,15 +152,12 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-        # Verify that request.Request called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
-
     @patch("time.sleep")
     @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_500)
     def test_request_with_handling_for_500_exception_handling(self, mocked_request, mock_api_token, mock_sleep):
         """
-        Test that `request` method raise 500 error with proper message and retry it 5 times
+        Test that `request` method raise 500 error with proper message
         """
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
         try:
@@ -164,10 +167,6 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
             " it from fulfilling the request."
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
-
-        # Verify that request.Request called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
-
 
 class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
 
@@ -240,7 +239,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
     @patch("requests.Session.request", side_effect=mock_send_429)
     def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_sleep):
         """
-        Test that `__enter__` method raise 429 error with proper message and retry it 5 times
+        Test that `__enter__` method raise 429 error with proper message
         """
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
         try:
@@ -250,14 +249,11 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-        # Verify that request.Request called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
-
     @patch("time.sleep")
     @patch("requests.Session.request", side_effect=mock_send_500)
     def test_request_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
         """
-        Test that `500` method raise 429 error with proper message and retry it 5 times
+        Test that `__enter__` method raise 500 error with proper message
         """
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
         try:
@@ -268,10 +264,68 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
+@patch("time.sleep")
+class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
+    """
+    Test that tap perform backoff on 429, 5xx and ConnectionError.
+    """
+
+    @patch("requests.Session.request", side_effect=mock_send_429)
+    def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry 429 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except client.ActiveCampaignRateLimitError:
+            pass
+
         # Verify that request.Request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("time.sleep")     
+    @patch("requests.Session.request", side_effect=mock_send_500)
+    def test_request_method_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry 500 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except client.ActiveCampaignInternalServerError:
+            pass
+
+        # Verify that request.Request called 5 times
+        self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("requests.Session.request", side_effect=mock_send_501)
+    def test_request_with_handling_for_501_exception_handling(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry 501 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except client.Server5xxError:
+            pass
+
+        # Verify that request.Request called 5 times
+        self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("requests.Session.request", side_effect=mock_send_502)
+    def test_request_with_handling_for_502_exception_handling(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry 502 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except client.Server5xxError:
+            pass
+
+        # Verify that request.Request called 5 times
+        self.assertEqual(mocked_request.call_count, 5)
+
     @patch("requests.Session.request", side_effect=requests.exceptions.ConnectionError)
     def test_request_connection_error(self, mocked_request, mock_sleep):
         """
@@ -280,7 +334,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
         try:
             _client.__enter__()
-        except requests.exceptions.ConnectionError as e:
+        except requests.exceptions.ConnectionError:
             pass
 
         # Verify that request.Request called 5 times

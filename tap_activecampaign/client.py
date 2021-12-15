@@ -76,6 +76,10 @@ STATUS_CODE_EXCEPTION_MAPPING = {
 
 def get_exception_for_status_code(status_code):
     # Map the status code with `STATUS_CODE_EXCEPTION_MAPPING` dictionary and accordingly return the error.
+    if status_code > 500:
+        # Raise Server5xxError if status code greater than 500
+        return Server5xxError
+
     return STATUS_CODE_EXCEPTION_MAPPING.get(status_code, {}).get("raise_exception", ActiveCampaignError)
 
 # Example 422 error
