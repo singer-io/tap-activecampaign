@@ -170,7 +170,7 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
 
 class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
 
-    @patch("requests.Session.request", side_effect=mock_send_400)
+    @patch("requests.Session.get", side_effect=mock_send_400)
     def test_request_with_handling_for_400_exception_handling(self, mocked_request):
         """
         Test that `__enter__` method raise 400 error with proper message
@@ -183,7 +183,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-    @patch("requests.Session.request", side_effect=mock_send_401)
+    @patch("requests.Session.get", side_effect=mock_send_401)
     def test_request_with_handling_for_401_exception_handling(self, mocked_request):
         """
         Test that `__enter__` method raise 401 error with proper message
@@ -196,7 +196,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-    @patch("requests.Session.request", side_effect=mock_send_403)
+    @patch("requests.Session.get", side_effect=mock_send_403)
     def test_request_with_handling_for_403_exception_handling(self, mocked_request):
         """
         Test that `__enter__` method raise 403 error with proper message
@@ -209,7 +209,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-    @patch("requests.Session.request", side_effect=mock_send_404)
+    @patch("requests.Session.get", side_effect=mock_send_404)
     def test_request_with_handling_for_404_exception_handling(self, mocked_request):
         """
         Test that `__enter__` method raise 404 error with proper message
@@ -222,7 +222,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             # Verifying the message formed for the custom exception
             self.assertEqual(str(e), expected_error_message)
 
-    @patch("requests.Session.request", side_effect=mock_send_422)
+    @patch("requests.Session.get", side_effect=mock_send_422)
     def test_request_with_handling_for_422_exception_handling(self, mocked_request):
         """
         Test that `__enter__` method raise 422 error with proper message comes from API response.
@@ -236,7 +236,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             self.assertEqual(str(e), expected_error_message)
 
     @patch("time.sleep")
-    @patch("requests.Session.request", side_effect=mock_send_429)
+    @patch("requests.Session.get", side_effect=mock_send_429)
     def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method raise 429 error with proper message
@@ -250,7 +250,7 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
             self.assertEqual(str(e), expected_error_message)
 
     @patch("time.sleep")
-    @patch("requests.Session.request", side_effect=mock_send_500)
+    @patch("requests.Session.get", side_effect=mock_send_500)
     def test_request_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method raise 500 error with proper message
@@ -270,7 +270,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
     Test that tap perform backoff on 429, 5xx and ConnectionError.
     """
 
-    @patch("requests.Session.request", side_effect=mock_send_429)
+    @patch("requests.Session.get", side_effect=mock_send_429)
     def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 429 error 5 times
@@ -281,10 +281,10 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         except client.ActiveCampaignRateLimitError:
             pass
 
-        # Verify that request.Request called 5 times
+        # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("requests.Session.request", side_effect=mock_send_500)
+    @patch("requests.Session.get", side_effect=mock_send_500)
     def test_request_method_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 500 error 5 times
@@ -295,10 +295,10 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         except client.ActiveCampaignInternalServerError:
             pass
 
-        # Verify that request.Request called 5 times
+        # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("requests.Session.request", side_effect=mock_send_501)
+    @patch("requests.Session.get", side_effect=mock_send_501)
     def test_request_with_handling_for_501_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 501 error 5 times
@@ -309,10 +309,10 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         except client.Server5xxError:
             pass
 
-        # Verify that request.Request called 5 times
+        # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("requests.Session.request", side_effect=mock_send_502)
+    @patch("requests.Session.get", side_effect=mock_send_502)
     def test_request_with_handling_for_502_exception_handling(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 502 error 5 times
@@ -323,10 +323,10 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         except client.Server5xxError:
             pass
 
-        # Verify that request.Request called 5 times
+        # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("requests.Session.request", side_effect=requests.exceptions.ConnectionError)
+    @patch("requests.Session.get", side_effect=requests.exceptions.ConnectionError)
     def test_request_connection_error(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry Connection error 5 times.
@@ -337,5 +337,5 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         except requests.exceptions.ConnectionError:
             pass
 
-        # Verify that request.Request called 5 times
+        # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
