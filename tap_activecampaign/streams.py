@@ -1031,7 +1031,7 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products'
 }
 
 def flatten_streams():

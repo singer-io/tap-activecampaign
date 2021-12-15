@@ -34,9 +34,9 @@ def sync(client, config, catalog, state):
 
     # Loop through endpoints in selected_streams
     for stream_name in selected_streams:
-        
+
         # parent stream will sync sub stream
-        if stream_name in SUB_STREAMS:
+        if stream_name in SUB_STREAMS.values():
             continue
         LOGGER.info('START Syncing: {}'.format(stream_name))
         
