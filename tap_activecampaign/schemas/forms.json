@@ -171,7 +171,9 @@
     "cfields": {
       "anyOf": [
         {
-          "type": "null"
+          "type": ["null", "object"],
+          "additionalProperties": false,
+          "properties": {}
         },
         {
           "type": "array",
