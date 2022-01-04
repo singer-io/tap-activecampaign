@@ -2,7 +2,7 @@ version: 2
 jobs:
   build:
     docker:
-      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:stitch-tap-tester
+      - image: 218546966473.dkr.ecr.us-east-1.amazonaws.com/circle-ci:tap-tester-v4
     steps:
       - checkout
       - run:
@@ -11,17 +11,12 @@ jobs:
             python3 -mvenv /usr/local/share/virtualenvs/tap-activecampaign
             source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
             pip install -U 'pip<19.2' setuptools
-            pip install .[test]
-      - run:
-          name: 'pylint'
-          command: |
-            source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
-            pylint tap_activecampaign -d bad-indentation,missing-docstring,line-too-long,no-member
+            pip install .[dev]
       - add_ssh_keys
       - run:
           name: 'Integration Tests'
           command: |
-            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/tap_tester_sandbox dev_env.sh
+            aws s3 cp s3://com-stitchdata-dev-deployment-assets/environments/tap-tester/sandbox dev_env.sh
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             run-test --tap=tap-activecampaign \
