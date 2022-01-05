@@ -34,8 +34,8 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
         stream_to_test_1 = {'scores', 'contact_data', 'forms', 'templates'}
         self.run_test(days=4, expected_streams= stream_to_test_1)
 
-        stream_to_test_2 = {'conversions', 'conversion_triggers', 'goals', 'site_messages'}
-        self.run_test(days=6, expected_streams= stream_to_test_2)
+        stream_to_test_2 = {'conversions', 'conversion_triggers', 'goals', 'site_messages', 'contacts'}
+        self.run_test(days=7, expected_streams= stream_to_test_2)
         
         expected_streams = expected_streams - stream_to_test_2 - stream_to_test_1
         self.run_test(days=2, expected_streams=expected_streams)
