@@ -403,16 +403,8 @@ class ActiveCampaignTest(unittest.TestCase):
     def expected_check_streams(self):
         return set(self.expected_metadata().keys())
 
-    def expected_replication_keys(self):
-        return {table: properties.get(self.REPLICATION_KEYS, set()) for table, properties
-                in self.expected_metadata().items()}
-
     def expected_primary_keys(self):
         return {table: properties.get(self.PRIMARY_KEYS, set()) for table, properties
-                in self.expected_metadata().items()}
-
-    def expected_replication_method(self):
-        return {table: properties.get(self.REPLICATION_METHOD, set()) for table, properties
                 in self.expected_metadata().items()}
         
     def expected_automatic_fields(self):
@@ -536,61 +528,3 @@ class ActiveCampaignTest(unittest.TestCase):
 
             connections.select_catalog_and_fields_via_metadata(
                 conn_id, catalog, schema, [], non_selected_properties)
-
-    def calculated_states_by_stream(self, current_state):
-        timedelta_by_stream = {stream: [0,0,1]  # {stream_name: [days, hours, minutes], ...}
-                               for stream in self.expected_check_streams()}
-
-        stream_to_calculated_state = {stream: "" for stream in current_state['bookmarks'].keys()}
-        for stream, state in current_state['bookmarks'].items():
-            state_as_datetime = dateutil.parser.parse(state)
-
-            days, hours, minutes = timedelta_by_stream[stream]
-            calculated_state_as_datetime = state_as_datetime - timedelta(days=days, hours=hours, minutes=minutes)
-
-            calculated_state_formatted = dt.strftime(calculated_state_as_datetime, self.START_DATE_FORMAT)
-
-            stream_to_calculated_state[stream] = calculated_state_formatted
-
-        return stream_to_calculated_state
-
-    def convert_state_to_utc(self, date_str):
-        """
-        Convert a saved bookmark value of the form '2020-08-25T13:17:36-07:00' to
-        a string formatted utc datetime,
-        in order to compare aginast json formatted datetime values
-        """
-        date_object = dateutil.parser.parse(date_str)
-        date_object_utc = date_object.astimezone(tz=pytz.UTC)
-        return dt.strftime(date_object_utc, "%Y-%m-%dT%H:%M:%SZ")
-    
-    def timedelta_formatted(self, dtime, days=0):
-        try:
-            date_stripped = dt.strptime(dtime, self.START_DATE_FORMAT)
-            return_date = date_stripped + timedelta(days=days)
-
-            return dt.strftime(return_date, self.START_DATE_FORMAT)
-
-        except ValueError:
-                return Exception("Datetime object is not of the format: {}".format(self.START_DATE_FORMAT))
-
-    def parse_date(self, date_value):
-        """
-        Pass in string-formatted-datetime, parse the value, and return it as an unformatted datetime object.
-        """
-        date_formats = {
-            "%Y-%m-%dT%H:%M:%S.%fZ",
-            "%Y-%m-%dT%H:%M:%SZ",
-            "%Y-%m-%dT%H:%M:%S.%f+00:00",
-            "%Y-%m-%dT%H:%M:%S+00:00",
-            "%Y-%m-%d"
-        }
-        for date_format in date_formats:
-            try:
-                date_stripped = dt.strptime(date_value, date_format)
-                return date_stripped
-            except ValueError:
-                continue
-
-        raise NotImplementedError(
-            "Tests do not account for dates of this format: {}".format(date_value))
