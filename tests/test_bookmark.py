@@ -11,7 +11,7 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
     """Test tap sets a bookmark and respects it for the next sync of a stream"""
     
     def name(self):
-        return "ActiveCampaign_bookmark_test"
+        return "activecampaign_bookmark_test"
 
     def test_run(self):
         """

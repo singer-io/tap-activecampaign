@@ -12,6 +12,16 @@ jobs:
             source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
             pip install -U 'pip<19.2' setuptools
             pip install .[dev]
+      - run:
+          name: 'JSON Validator'
+          command: |
+            source /usr/local/share/virtualenvs/tap-tester/bin/activate
+            stitch-validate-json tap_activecampaign/schemas/*.json
+      - run:
+          name: 'pylint'
+          command: |
+            source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
+            pylint tap_activecampaign -d C,R,W
       - add_ssh_keys
       - run:
           name: 'Integration Tests'

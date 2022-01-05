@@ -9,7 +9,7 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
     """
     
     def name(self):
-        return "ActiveCampaign_automatic_fields"
+        return "activecampaign_automatic_fields"
 
     def test_run(self):
         """

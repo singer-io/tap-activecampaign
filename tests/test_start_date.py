@@ -14,7 +14,7 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
     start_date_2 = ""
 
     def name(self):
-        return "ActiveCampaign_start_date_test"
+        return "activecampaign_start_date_test"
         
     def test_run(self):
         """

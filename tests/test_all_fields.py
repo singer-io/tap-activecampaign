@@ -7,7 +7,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
     """Ensure running the tap with all streams and fields selected results in the replication of all fields."""
      
     def name(self):
-        return "ActiveCampaign_all_fields"
+        return "activecampaign_all_fields"
 
     def test_run(self):
         """

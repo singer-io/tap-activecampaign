@@ -10,7 +10,7 @@ class ActiveCampaignPagination(ActiveCampaignTest):
     """
     API_LIMIT = 100
     def name(self):
-        return "ActiveCampaign_pagination_test"
+        return "activecampaign_pagination_test"
 
     def test_run(self):
         """
