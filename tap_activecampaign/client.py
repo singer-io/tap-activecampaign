@@ -77,7 +77,7 @@ STATUS_CODE_EXCEPTION_MAPPING = {
 def get_exception_for_status_code(status_code):
     # Map the status code with `STATUS_CODE_EXCEPTION_MAPPING` dictionary and accordingly return the error.
     if status_code > 500:
-        # Raise Server5xxError if status code greater than 500
+        # Raise Server5xxError if status code is greater than 500
         return Server5xxError
 
     return STATUS_CODE_EXCEPTION_MAPPING.get(status_code, {}).get("raise_exception", ActiveCampaignError)
@@ -94,9 +94,8 @@ def get_exception_for_status_code(status_code):
 #   ]
 # }
 def raise_for_error(response):
-    # Class for each error defined above which extends `ActiveCampaignError`. If response contain `errors` 
-    # object with multiple errors perpare error message containing title of all error  in `errors` object.
-    # Otherwise perpare custom default message and raise the exception.
+    # If the response contains an `errors` object with multiple errors, prepare an error message containing the title of all errors in the `errors` object.
+    # Otherwise prepare a custom default message and raise the exception.
 
     try:
         response_json = response.json() # retrieve json response

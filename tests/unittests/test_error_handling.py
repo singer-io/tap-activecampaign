@@ -279,10 +279,9 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         try:
             _client.__enter__()
         except client.ActiveCampaignRateLimitError:
-            pass
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
 
-        # Verify that requests.Session.get called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=mock_send_500)
     def test_request_method_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
@@ -293,10 +292,8 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         try:
             _client.__enter__()
         except client.ActiveCampaignInternalServerError:
-            pass
-
-        # Verify that requests.Session.get called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=mock_send_501)
     def test_request_with_handling_for_501_exception_handling(self, mocked_request, mock_sleep):
@@ -307,10 +304,8 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         try:
             _client.__enter__()
         except client.Server5xxError:
-            pass
-
-        # Verify that requests.Session.get called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=mock_send_502)
     def test_request_with_handling_for_502_exception_handling(self, mocked_request, mock_sleep):
@@ -321,10 +316,8 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         try:
             _client.__enter__()
         except client.Server5xxError:
-            pass
-
-        # Verify that requests.Session.get called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=requests.exceptions.ConnectionError)
     def test_request_connection_error(self, mocked_request, mock_sleep):
@@ -335,7 +328,5 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         try:
             _client.__enter__()
         except requests.exceptions.ConnectionError:
-            pass
-
-        # Verify that requests.Session.get called 5 times
-        self.assertEqual(mocked_request.call_count, 5)
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
