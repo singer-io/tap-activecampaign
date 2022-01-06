@@ -1,6 +1,5 @@
 import backoff
 import requests
-from requests.exceptions import ConnectionError
 from singer import metrics, utils
 import singer
 
@@ -74,6 +73,22 @@ STATUS_CODE_EXCEPTION_MAPPING = {
     }
 }
 
+def should_retry_error(exception):
+    """ 
+        Return true if exception is required to retry otherwise return false
+    """
+
+    if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error):
+        # Retry Server5xxError and Server429Error exception. Retry exception if it is child class of OSError.
+        # OSError is Parent class of ConnectionError, ConnectionResetError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
+        return True
+    elif type(exception) == Exception and type(exception.args[0][1]) == ConnectionResetError:
+        # Tap raises Exception: ConnectionResetError(104, 'Connection reset by peer'). That's why we retrying this error also.
+        # Reference: https://app.circleci.com/pipelines/github/singer-io/tap-activecampaign/554/workflows/d448258e-20df-4e66-b2aa-bc8bd1f08912/jobs/558
+        return True
+    else:
+        return False
+
 def get_exception_for_status_code(status_code):
     # Map the status code with `STATUS_CODE_EXCEPTION_MAPPING` dictionary and accordingly return the error.
     if status_code > 500:
@@ -132,9 +147,10 @@ class ActiveCampaignClient(object):
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
 
-    # Backoff for ConnectionError and 429 rate limit error.
+    # Backoff for Server5xxError, Server429Error, OSError and Exception with ConnectionResetError.
     @backoff.on_exception(backoff.expo,
-                          (ConnectionError, Server429Error),
+                          (Exception),
+                          giveup=lambda e: not should_retry_error(e),
                           max_tries=5,
                           factor=2)
     def __enter__(self):
@@ -144,10 +160,6 @@ class ActiveCampaignClient(object):
     def __exit__(self, exception_type, exception_value, traceback):
         self.__session.close()
 
-    @backoff.on_exception(backoff.expo,
-                          Server5xxError,
-                          max_tries=5,
-                          factor=2)
     def check_api_token(self):
         if self.__api_token is None:
             raise Exception('Error: Missing api_token.')
@@ -166,9 +178,10 @@ class ActiveCampaignClient(object):
         else:
             return True
 
-
+    # Backoff for Server5xxError, Server429Error, OSError and Exception with ConnectionResetError.
     @backoff.on_exception(backoff.expo,
-                          (Server5xxError, ConnectionError, Server429Error, OSError),
+                          (Exception),
+                          giveup=lambda e: not should_retry_error(e),
                           max_tries=5,
                           factor=2)
     # Rate limit: https://developers.activecampaign.com/reference#rate-limits

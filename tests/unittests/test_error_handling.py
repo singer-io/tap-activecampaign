@@ -267,11 +267,11 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
 @patch("time.sleep")
 class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
     """
-    Test that tap perform backoff on 429, 5xx and ConnectionError.
+    Test that tap perform backoff on 429, 5xx, ConnectionError and ConnectionResetError Exception.
     """
 
     @patch("requests.Session.get", side_effect=mock_send_429)
-    def test_request_with_handling_for_429_exception_handling(self, mocked_request, mock_sleep):
+    def test_enter_method_handle_429_exception(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 429 error 5 times
         """
@@ -284,7 +284,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
 
 
     @patch("requests.Session.get", side_effect=mock_send_500)
-    def test_request_method_with_handling_for_500_exception_handling(self, mocked_request, mock_sleep):
+    def test_enter_method_handle_500_exception(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 500 error 5 times
         """
@@ -296,7 +296,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
             self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=mock_send_501)
-    def test_request_with_handling_for_501_exception_handling(self, mocked_request, mock_sleep):
+    def test_enter_method_handle_501_exception(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 501 error 5 times
         """
@@ -308,7 +308,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
             self.assertEqual(mocked_request.call_count, 5)
 
     @patch("requests.Session.get", side_effect=mock_send_502)
-    def test_request_with_handling_for_502_exception_handling(self, mocked_request, mock_sleep):
+    def test_enter_method_handle_502_exception(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry 502 error 5 times
         """
@@ -319,8 +319,20 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
             # Verify that requests.Session.get called 5 times
             self.assertEqual(mocked_request.call_count, 5)
 
+    @patch("requests.Session.get", side_effect=mock_send_401)
+    def test_enter_method_does_not_retry_401_error(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method does not retry 401 error.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except client.ActiveCampaignUnauthorizedError:
+            # Verify that requests.Session.get called just 1 time
+            self.assertEqual(mocked_request.call_count, 1)
+            
     @patch("requests.Session.get", side_effect=requests.exceptions.ConnectionError)
-    def test_request_connection_error(self, mocked_request, mock_sleep):
+    def test_enter_method_handle_connection_error(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry Connection error 5 times.
         """
@@ -329,4 +341,107 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
             _client.__enter__()
         except requests.exceptions.ConnectionError:
             # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("requests.Session.get", side_effect=Exception(("Connection broken: ConnectionResetError(104, 'Connection reset by peer')", ConnectionResetError(104, 'Connection reset by peer'))))
+    def test_enter_method_handle_connection_reset_exception(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry Connection error(104) with Exception 5 times.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.__enter__()
+        except Exception:
+            # Verify that requests.Session.get called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")    
+    @patch("requests.Session.request", side_effect=mock_send_429)
+    def test_request_method_handle_429_exception(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry 429 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except client.ActiveCampaignRateLimitError:
+            # Verify that requests.Session.request called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("requests.Session.request", side_effect=mock_send_500)
+    def test_request_method_handle_500_exception(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry 500 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except client.ActiveCampaignInternalServerError:
+            # Verify that requests.Session.request called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("requests.Session.request", side_effect=mock_send_501)
+    def test_request_method_handle_501_exception(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry 501 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except client.Server5xxError:
+            # Verify that requests.Session.request called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("requests.Session.request", side_effect=mock_send_502)
+    def test_request_method_handle_502_exception(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry 502 error 5 times
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except client.Server5xxError:
+            # Verify that requests.Session.request called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("requests.Session.request", side_effect=mock_send_401)
+    def test_request_method_does_not_retry_401_error(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method does not retry 401 error.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except client.ActiveCampaignUnauthorizedError:
+            # Verify that requests.Session.request called just 1 time
+            self.assertEqual(mocked_request.call_count, 1)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")     
+    @patch("requests.Session.request", side_effect=requests.exceptions.ConnectionError)
+    def test_request_method_handle_connection_error(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry Connection error 5 times.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except requests.exceptions.ConnectionError:
+            # Verify that requests.Session.request called 5 times
+            self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("requests.Session.request", side_effect=Exception(("Connection broken: ConnectionResetError(104, 'Connection reset by peer')", ConnectionResetError(104, 'Connection reset by peer'))))
+    def test_request_method_handle_connection_reset_exception(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry Connection error(104) with Exception 5 times.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        try:
+            _client.request("base_url")
+        except Exception:
+            # Verify that requests.Session.request called 5 times
             self.assertEqual(mocked_request.call_count, 5)
