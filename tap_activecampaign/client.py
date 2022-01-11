@@ -101,10 +101,9 @@ class ActiveCampaignClient(object):
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
         # if request_timeout is other than 0, "0" or "" then use request_timeout
         if request_timeout and float(request_timeout):
-            request_timeout = float(request_timeout)
+            self.request_timeout = float(request_timeout)
         else: # If value is 0, "0" or "" then set default to 300 seconds.
-            request_timeout = REQUEST_TIMEOUT
-        self.request_timeout = request_timeout
+            self.request_timeout = REQUEST_TIMEOUT
 
     # backoff the request for 5 times when request times out. Also, sometimes during
     # request timeout there is a possibility of ConnectionError, hence included in the backoff
