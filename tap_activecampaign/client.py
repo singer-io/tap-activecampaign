@@ -124,13 +124,13 @@ def raise_for_error(response):
         for error in errors:
             title = error.get('title')
             message = '{} {}'.format(message, title)
-            exc = get_exception_for_status_code(status_code)
     else:
         # prepare custom default error message
         message = "HTTP-error-code: {}, Error: {}".format(status_code,
                 response_json.get("message", STATUS_CODE_EXCEPTION_MAPPING.get(
                 status_code, {}).get("message", "Unknown Error")))
-        exc = get_exception_for_status_code(status_code)
+    
+    exc = get_exception_for_status_code(status_code)
 
     raise exc(message) from None
 
