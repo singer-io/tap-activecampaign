@@ -14,8 +14,8 @@ class TestBackoffError(unittest.TestCase):
         Check whether the request backoffs properly for request() for 5 times in case of Timeout error.
         """
         mock_request.side_effect = Timeout
+        client = ActiveCampaignClient("dummy_client_id", "dummy_client_secret", "dummy_refresh_token", 300)
         with self.assertRaises(Timeout):
-            client = ActiveCampaignClient("dummy_client_id", "dummy_client_secret", "dummy_refresh_token", 300)
             client.request("GET")
         self.assertEquals(mock_request.call_count, 5)
 
@@ -39,11 +39,9 @@ class TestBackoffError(unittest.TestCase):
                                       config.get('request_timeout')) as client:
                 pass
         except Timeout:
-            pass
-
-        # verify that we backoff for 5 times
-        self.assertEquals(mocked_request.call_count, 5)
-    
+            # verify that we backoff for 5 times
+            self.assertEquals(mocked_request.call_count, 5)
+        
     @mock.patch('tap_activecampaign.client.requests.Session.request')
     def test_check_api_token_connection_error_and_backoff(self, mocked_request):
         """
@@ -64,10 +62,8 @@ class TestBackoffError(unittest.TestCase):
                                       config.get('request_timeout')) as client:
                 pass
         except ConnectionError:
-            pass
-
-        # verify that we backoff for 5 times
-        self.assertEquals(mocked_request.call_count, 5)
+            # verify that we backoff for 5 times
+            self.assertEquals(mocked_request.call_count, 5)
 
 class MockResponse():
     '''
