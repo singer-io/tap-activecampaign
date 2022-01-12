@@ -143,6 +143,9 @@ class ActiveCampaign:
                             transformed_record[bookmark_field] > self.transform_datetime(max_bookmark_value):
                             max_bookmark_value = transformed_record[bookmark_field]
 
+                    # If bookmark_field is not none that means stream is incremental.
+                    # So, in that case, the tap writes only those records of which the replication key value is greater than last saved bookmark key value
+                    # For, FULL_TABLE stream bookmark_field is none. So, in the `else` part it writes all records for the FULL_TABLE stream
                     if bookmark_field and (bookmark_field in transformed_record):
                         last_dttm = self.transform_datetime(last_datetime)
                         bookmark_dttm = self.transform_datetime(transformed_record[bookmark_field])
@@ -257,7 +260,6 @@ class ActiveCampaign:
                     data_dict[data_key] = data_list
                     transformed_data = transform_json(data_dict, self.stream_name, data_key)
 
-            # LOGGER.info('transformed_data = {}'.format(transformed_data)) # TESTING, comment out
             if not transformed_data or transformed_data is None:
                 LOGGER.info('No transformed data for data = {}'.format(data))
                 break # No data results
