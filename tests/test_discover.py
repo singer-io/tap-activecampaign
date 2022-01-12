@@ -12,6 +12,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
         • Verify stream names follow naming convention
           streams should only have lowercase alphas and underscores
         • verify there is only 1 top level breadcrumb
+        • verify there are no duplicate metadata entries
         • verify replication key(s)
         • verify primary key(s)
         • verify that if there is a replication key we are doing INCREMENTAL otherwise FULL
@@ -41,7 +42,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
         for stream in streams_to_test:
             with self.subTest(stream=stream):
 
-                # Verify ensure the caatalog is found for a given stream
+                # Verify the catalog is found for a given stream
                 catalog = next(iter([catalog for catalog in found_catalogs
                                      if catalog["stream_name"] == stream]))
                 self.assertIsNotNone(catalog)
@@ -77,6 +78,11 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                     if item.get("metadata").get("inclusion") == "automatic"
                 )
                 
+                actual_fields = []
+                for md_entry in metadata:
+                    if md_entry['breadcrumb'] != []:
+                        actual_fields.append(md_entry['breadcrumb'][1])
+
                 ##########################################################################
                 # metadata assertions
                 ##########################################################################
@@ -85,6 +91,9 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                 self.assertTrue(len(stream_properties) == 1,
                                 msg="There is NOT only one top level breadcrumb for {}".format(stream) +
                                 "\nstream_properties | {}".format(stream_properties))
+
+                # verify there are no duplicate metadata entries
+                self.assertEqual(len(actual_fields), len(set(actual_fields)), msg = f"duplicates in the fields retrieved")
 
                 # verify primary key(s) match expectations
                 self.assertSetEqual(
@@ -96,7 +105,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                 self.assertSetEqual(expected_automatic_fields,
                                     actual_automatic_fields)
 
-                # verify that all other fields have inclusion of available
+                # verify that all other fields have inclusion of available metadata
                 # This assumes there are no unsupported fields for SaaS sources
                 self.assertTrue(
                     all({item.get("metadata").get("inclusion") == "available"
@@ -106,7 +115,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                          not in actual_automatic_fields}),
                     msg="Not all non key properties are set to available in metadata")
 
-
+                # verify that if there is a replication key we are doing INCREMENTAL otherwise FULL
                 if actual_replication_keys:
                     self.assertTrue(actual_replication_method == self.INCREMENTAL,
                                     msg="Expected INCREMENTAL replication "
@@ -121,7 +130,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                                     msg="The actual replication method {} doesn't match the expected {}".format(
                                         actual_replication_method, expected_replication_method))
 
-                # verify replication key(s)
+                # verify replication key(s) match expectations
                 self.assertEqual(expected_replication_keys, actual_replication_keys,
                                  msg="expected replication key {} but actual is {}".format(
                                      expected_replication_keys, actual_replication_keys))
