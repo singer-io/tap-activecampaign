@@ -81,6 +81,8 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
                     expected_all_keys = expected_all_keys - {'order_products'}
 
                 #  BUG | below keys are not synced due to typo mismatch  https://jira.talendforge.org/browse/TDL-16481
+                # Fixed this bug in PR#10(https://github.com/singer-io/tap-activecampaign/pull/10). In that PR all fields
+                # are replicated in the target which we verified by the all_fields test case without skipping the below fields.
                 if stream == "brandings":
                     expected_all_keys = expected_all_keys - {'group_id', 'admin_template_httm', 'public_template_httm'}
                 elif stream == "campaign_links":

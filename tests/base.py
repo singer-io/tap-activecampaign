@@ -20,6 +20,7 @@ class ActiveCampaignTest(unittest.TestCase):
     OBEYS_START_DATE = "obey-start-date"
 
     def tap_name(self):
+        """The name of the tap"""
         return "tap-activecampaign"
     
     def setUp(self):
@@ -35,12 +36,14 @@ class ActiveCampaignTest(unittest.TestCase):
         return "platform.activecampaign"
 
     def get_credentials(self):
+        """Authentication information for the test account"""
         return {
             'api_url': os.getenv('TAP_ACTIVECAMPAIGN_API_URL'),
             'api_token': os.getenv('TAP_ACTIVECAMPAIGN_API_TOKEN')
         }
 
     def get_properties(self, original: bool = True):
+        """Configuration properties required for the tap."""
         return_value = {
             "start_date" : "2021-12-01T00:00:00Z",
         }
@@ -52,6 +55,7 @@ class ActiveCampaignTest(unittest.TestCase):
         return return_value
     
     def expected_metadata(self):
+        """The expected streams and metadata about the streams"""
         return {
             'accounts': {
                 self.PRIMARY_KEYS: {'id'},
@@ -395,17 +399,22 @@ class ActiveCampaignTest(unittest.TestCase):
 
 
     def expected_check_streams(self):
+        """A set of expected stream names"""
         return set(self.expected_metadata().keys())
 
     def expected_replication_keys(self):
+        """return a dictionary with key of table name and value as a set of replication key fields"""
+
         return {table: properties.get(self.REPLICATION_KEYS, set()) for table, properties
                 in self.expected_metadata().items()}
 
     def expected_primary_keys(self):
+        """return a dictionary with key of table name and value as a set of primary key fields"""
         return {table: properties.get(self.PRIMARY_KEYS, set()) for table, properties
                 in self.expected_metadata().items()}
 
     def expected_replication_method(self):
+        """return a dictionary with key of table name nd value of replication method"""
         return {table: properties.get(self.REPLICATION_METHOD, set()) for table, properties
                 in self.expected_metadata().items()}
         
@@ -439,6 +448,13 @@ class ActiveCampaignTest(unittest.TestCase):
         return found_catalogs
 
     def run_and_verify_sync(self, conn_id):
+        """
+        Run a sync job and make sure it exited properly.
+        Return a dictionary with keys of streams synced
+        and values of records synced for each stream
+        """
+
+        # Run a sync job using orchestrator
         sync_job_name = runner.run_sync_mode(self, conn_id)
 
         # verify tap and target exit codes
