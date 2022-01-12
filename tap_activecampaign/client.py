@@ -83,7 +83,7 @@ def should_retry_error(exception):
         # OSError is Parent class of ConnectionError, ConnectionResetError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
         return True
     elif type(exception) == Exception and type(exception.args[0][1]) == ConnectionResetError:
-        # Tap raises Exception: ConnectionResetError(104, 'Connection reset by peer'). That's why we retrying this error also.
+        # Tap raises Exception: ConnectionResetError(104, 'Connection reset by peer'). That's why we are retrying this error also.
         # Reference: https://app.circleci.com/pipelines/github/singer-io/tap-activecampaign/554/workflows/d448258e-20df-4e66-b2aa-bc8bd1f08912/jobs/558
         return True
     else:
