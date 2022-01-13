@@ -115,6 +115,14 @@ class ActiveCampaign:
                         last_datetime=None,
                         parent=None,
                         parent_id=None):
+        """
+        This function perform following operation,
+        • Transform all the records
+        • Updated bookmark value to new replication key value of record if it is greater than last bookmark value
+        • Write only those records of which replication key value is after bookmark value of the last sync for incremental stream.
+        • Write all records for FULL_TABLE stream
+        • Return updated maximum bookmark value and total count of records
+        """
         stream = catalog.get_stream(stream_name)
         schema = stream.schema.to_dict()
         stream_metadata = metadata.to_map(stream.metadata)
