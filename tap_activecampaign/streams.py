@@ -118,7 +118,7 @@ class ActiveCampaign:
         """
         This function perform following operation,
         • Transform all the records
-        • Updated bookmark value to new replication key value of record if it is greater than last bookmark value
+        • Update bookmark value to replication key value of record if it is greater than last bookmark value
         • Write only those records of which replication key value is after bookmark value of the last sync for incremental stream.
         • Write all records for FULL_TABLE stream
         • Return updated maximum bookmark value and total count of records
