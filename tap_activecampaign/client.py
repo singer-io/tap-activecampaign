@@ -1,10 +1,11 @@
 import backoff
 import requests
-from requests.exceptions import ConnectionError
+from requests.exceptions import ConnectionError, Timeout
 from singer import metrics, utils
 import singer
 
 LOGGER = singer.get_logger()
+REQUEST_TIMEOUT = 300
 
 DEFAULT_API_VERSION = '3'
 
@@ -90,14 +91,26 @@ class ActiveCampaignClient(object):
     def __init__(self,
                  api_url,
                  api_token,
-                 user_agent=None):
+                 user_agent=None,
+                 request_timeout=None):
         self.__api_url = api_url
         self.__api_token = api_token
         self.__user_agent = user_agent
         self.__session = requests.Session()
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
+        # if request_timeout is other than 0, "0" or "" then use request_timeout
+        if request_timeout and float(request_timeout):
+            self.request_timeout = float(request_timeout)
+        else: # If value is 0, "0" or "" then set default to 300 seconds.
+            self.request_timeout = REQUEST_TIMEOUT
 
+    # backoff the request for 5 times when request times out. Also, sometimes during
+    # request timeout there is a possibility of ConnectionError, hence included in the backoff
+    @backoff.on_exception(backoff.expo,
+                          (Timeout, ConnectionError),
+                          max_tries=5,
+                          factor=2)
     def __enter__(self):
         self.__verified = self.check_api_token()
         return self
@@ -121,16 +134,17 @@ class ActiveCampaignClient(object):
         response = self.__session.get(
             # Simple endpoint that returns 1 record w/ default organization URN
             url=url,
-            headers=headers)
+            headers=headers,
+            timeout=self.request_timeout)
         if response.status_code != 200:
             LOGGER.error('Error status_code = {}'.format(response.status_code))
             raise_for_error(response)
         else:
             return True
 
-
+    # added backoff for Timeout error for 5 times
     @backoff.on_exception(backoff.expo,
-                          (Server5xxError, ConnectionError, Server429Error, OSError),
+                          (Timeout, Server5xxError, ConnectionError, Server429Error, OSError),
                           max_tries=5,
                           factor=2)
     # Rate limit: https://developers.activecampaign.com/reference#rate-limits
@@ -163,7 +177,7 @@ class ActiveCampaignClient(object):
             kwargs['headers']['Content-Type'] = 'application/json'
 
         with metrics.http_request_timer(endpoint) as timer:
-            response = self.__session.request(method, url, stream=True, **kwargs)
+            response = self.__session.request(method, url, stream=True, timeout=self.request_timeout, **kwargs)
             timer.tags[metrics.Tag.http_status_code] = response.status_code
 
         if response.status_code == 429:

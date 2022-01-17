@@ -22,6 +22,17 @@ jobs:
           command: |
             source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
             pylint tap_activecampaign -d C,R,W
+      - run:
+          name: 'Unit Tests'
+          command: |
+            source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
+            pip install coverage
+            nosetests --with-coverage --cover-erase --cover-package=tap_activecampaign --cover-html-dir=htmlcov tests/unittests
+            coverage html
+      - store_test_results:
+          path: test_output/report.xml
+      - store_artifacts:
+          path: htmlcov
       - add_ssh_keys
       - run:
           name: 'Integration Tests'
