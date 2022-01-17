@@ -14,7 +14,7 @@
     "limit": {
       "type": ["null", "integer"]
     },
-    "enforce_limit": {
+    "enforcelimit": {
       "type": ["null", "integer"]
     },
     "cdate": {

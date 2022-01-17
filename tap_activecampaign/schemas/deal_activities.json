@@ -5,7 +5,7 @@
     "d_id": {
       "type": ["null", "integer"]
     },
-    "d_stage_id": {
+    "d_stageid": {
       "type": ["null", "integer"]
     },
     "userid": {
@@ -20,7 +20,7 @@
     "data_action": {
       "type": ["null", "string"]
     },
-    "data_old_val": {
+    "data_oldval": {
       "type": ["null", "string"]
     },
     "cdate": {

@@ -12,9 +12,21 @@
       "type": ["null", "integer"]
     },
     "params": {
-      "type": ["null", "object"],
-      "additionalProperties": true,
-      "properties": {}
+      "anyOf": [
+        {
+          "type": ["null", "object"],
+          "additionalProperties": true,
+          "properties": {}
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": ["null", "object"],
+            "additionalProperties": true,
+            "properties": {}
+          }
+        }
+      ]
     },
     "deleted": {
       "type": ["null", "integer"]
