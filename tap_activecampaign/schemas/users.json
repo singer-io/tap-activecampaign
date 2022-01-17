@@ -20,7 +20,7 @@
     "signature": {
       "type": ["null", "string"]
     },
-    "local_zone_id": {
+    "local_zoneid": {
       "type": ["null", "string"]
     },
     "password_updated_utc_timestamp": {

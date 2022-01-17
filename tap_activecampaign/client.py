@@ -4,6 +4,7 @@ from singer import metrics, utils
 import singer
 
 LOGGER = singer.get_logger()
+REQUEST_TIMEOUT = 300
 
 DEFAULT_API_VERSION = '3'
 
@@ -80,7 +81,7 @@ def should_retry_error(exception):
 
     if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error):
         # Retry Server5xxError and Server429Error exception. Retry exception if it is child class of OSError.
-        # OSError is Parent class of ConnectionError, ConnectionResetError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
+        # OSError is Parent class of ConnectionError, ConnectionResetError, TimeoutError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
         return True
     elif type(exception) == Exception and type(exception.args[0][1]) == ConnectionResetError:
         # Tap raises Exception: ConnectionResetError(104, 'Connection reset by peer'). That's why we are retrying this error also.
@@ -139,13 +140,20 @@ class ActiveCampaignClient(object):
     def __init__(self,
                  api_url,
                  api_token,
-                 user_agent=None):
+                 user_agent=None,
+                 request_timeout=None):
         self.__api_url = api_url
         self.__api_token = api_token
         self.__user_agent = user_agent
         self.__session = requests.Session()
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
+
+        # if request_timeout is other than 0, "0" or "" then use request_timeout
+        if request_timeout and float(request_timeout):
+            self.request_timeout = float(request_timeout)
+        else: # If value is 0, "0" or "" then set default to 300 seconds.
+            self.request_timeout = REQUEST_TIMEOUT
 
     # Backoff for Server5xxError, Server429Error, OSError and Exception with ConnectionResetError.
     @backoff.on_exception(backoff.expo,
@@ -172,7 +180,8 @@ class ActiveCampaignClient(object):
         response = self.__session.get(
             # Simple endpoint that returns 1 record w/ default organization URN
             url=url,
-            headers=headers)
+            headers=headers,
+            timeout=self.request_timeout)
         if response.status_code != 200:
             raise_for_error(response)
         else:
@@ -214,7 +223,7 @@ class ActiveCampaignClient(object):
             kwargs['headers']['Content-Type'] = 'application/json'
 
         with metrics.http_request_timer(endpoint) as timer:
-            response = self.__session.request(method, url, stream=True, **kwargs)
+            response = self.__session.request(method, url, stream=True, timeout=self.request_timeout, **kwargs)
             timer.tags[metrics.Tag.http_status_code] = response.status_code
 
         if response.status_code != 200:
