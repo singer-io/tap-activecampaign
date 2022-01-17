@@ -43,6 +43,13 @@ jobs:
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             run-test --tap=tap-activecampaign tests
+      - slack/status:
+          channel: 'stitch-tap-tester-tests'
+          mentions: "${CIRCLE_USERNAME}"
+          fail_only: true
+          only_for_branches: master
+          failure_message: |
+            :red_circle: ${CIRCLE_JOB} failed!
 workflows:
   version: 2
   commit:
