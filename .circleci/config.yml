@@ -41,6 +41,7 @@ jobs:
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             run-test --tap=tap-activecampaign tests
+
 workflows:
   version: 2
   commit:
