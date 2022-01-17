@@ -43,8 +43,6 @@ jobs:
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             run-test --tap=tap-activecampaign tests
-      - slack/notify-on-failure:
-          only_for_branches: master
 workflows:
   version: 2
   commit:
