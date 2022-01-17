@@ -46,7 +46,7 @@
     "last_name": {
       "type": ["null", "string"]
     },
-    "ip4_sub": {
+    "ip_4sub": {
       "type": ["null", "integer"]
     },
     "sourceid": {
@@ -58,7 +58,7 @@
     "ip4_last": {
       "type": ["null", "integer"]
     },
-    "ip4_unsub": {
+    "ip_4unsub": {
       "type": ["null", "integer"]
     },
     "created_timestamp": {
