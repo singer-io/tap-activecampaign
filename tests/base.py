@@ -20,6 +20,7 @@ class ActiveCampaignTest(unittest.TestCase):
     OBEYS_START_DATE = "obey-start-date"
 
     def tap_name(self):
+        """The name of the tap"""
         return "tap-activecampaign"
     
     def setUp(self):
@@ -35,14 +36,16 @@ class ActiveCampaignTest(unittest.TestCase):
         return "platform.activecampaign"
 
     def get_credentials(self):
+        """Authentication information for the test account"""
         return {
             'api_url': os.getenv('TAP_ACTIVECAMPAIGN_API_URL'),
             'api_token': os.getenv('TAP_ACTIVECAMPAIGN_API_TOKEN')
         }
 
     def get_properties(self, original: bool = True):
+        """Configuration properties required for the tap."""
         return_value = {
-            "start_date" : "2021-11-10T00:00:00Z",
+            "start_date" : "2021-12-01T00:00:00Z",
         }
         if original:
             return return_value
@@ -52,6 +55,7 @@ class ActiveCampaignTest(unittest.TestCase):
         return return_value
     
     def expected_metadata(self):
+        """The expected streams and metadata about the streams"""
         return {
             'accounts': {
                 self.PRIMARY_KEYS: {'id'},
@@ -345,12 +349,6 @@ class ActiveCampaignTest(unittest.TestCase):
                 self.REPLICATION_KEYS: {'udate'},
                 self.OBEYS_START_DATE: True
             },
-            'conversions': {
-                self.PRIMARY_KEYS: {'id'},
-                self.REPLICATION_METHOD: self.INCREMENTAL,
-                self.REPLICATION_KEYS: {'udate'},
-                self.OBEYS_START_DATE: True
-            },
             'conversion_triggers': {
                 self.PRIMARY_KEYS: {'id'},
                 self.REPLICATION_METHOD: self.INCREMENTAL,
@@ -401,10 +399,23 @@ class ActiveCampaignTest(unittest.TestCase):
 
 
     def expected_check_streams(self):
+        """A set of expected stream names"""
         return set(self.expected_metadata().keys())
 
+    def expected_replication_keys(self):
+        """return a dictionary with key of table name and value as a set of replication key fields"""
+
+        return {table: properties.get(self.REPLICATION_KEYS, set()) for table, properties
+                in self.expected_metadata().items()}
+
     def expected_primary_keys(self):
+        """return a dictionary with key of table name and value as a set of primary key fields"""
         return {table: properties.get(self.PRIMARY_KEYS, set()) for table, properties
+                in self.expected_metadata().items()}
+
+    def expected_replication_method(self):
+        """return a dictionary with key of table name nd value of replication method"""
+        return {table: properties.get(self.REPLICATION_METHOD, set()) for table, properties
                 in self.expected_metadata().items()}
         
     def expected_automatic_fields(self):
@@ -437,6 +448,13 @@ class ActiveCampaignTest(unittest.TestCase):
         return found_catalogs
 
     def run_and_verify_sync(self, conn_id):
+        """
+        Run a sync job and make sure it exited properly.
+        Return a dictionary with keys of streams synced
+        and values of records synced for each stream
+        """
+
+        # Run a sync job using orchestrator
         sync_job_name = runner.run_sync_mode(self, conn_id)
 
         # verify tap and target exit codes
@@ -528,3 +546,61 @@ class ActiveCampaignTest(unittest.TestCase):
 
             connections.select_catalog_and_fields_via_metadata(
                 conn_id, catalog, schema, [], non_selected_properties)
+
+    def calculated_states_by_stream(self, current_state):
+        timedelta_by_stream = {stream: [0,0,1]  # {stream_name: [days, hours, minutes], ...}
+                               for stream in self.expected_check_streams()}
+
+        stream_to_calculated_state = {stream: "" for stream in current_state['bookmarks'].keys()}
+        for stream, state in current_state['bookmarks'].items():
+            state_as_datetime = dateutil.parser.parse(state)
+
+            days, hours, minutes = timedelta_by_stream[stream]
+            calculated_state_as_datetime = state_as_datetime - timedelta(days=days, hours=hours, minutes=minutes)
+
+            calculated_state_formatted = dt.strftime(calculated_state_as_datetime, self.START_DATE_FORMAT)
+
+            stream_to_calculated_state[stream] = calculated_state_formatted
+
+        return stream_to_calculated_state
+
+    def convert_state_to_utc(self, date_str):
+        """
+        Convert a saved bookmark value of the form '2020-08-25T13:17:36-07:00' to
+        a string formatted utc datetime,
+        in order to compare aginast json formatted datetime values
+        """
+        date_object = dateutil.parser.parse(date_str)
+        date_object_utc = date_object.astimezone(tz=pytz.UTC)
+        return dt.strftime(date_object_utc, "%Y-%m-%dT%H:%M:%SZ")
+    
+    def timedelta_formatted(self, dtime, days=0):
+        try:
+            date_stripped = dt.strptime(dtime, self.START_DATE_FORMAT)
+            return_date = date_stripped + timedelta(days=days)
+
+            return dt.strftime(return_date, self.START_DATE_FORMAT)
+
+        except ValueError:
+                return Exception("Datetime object is not of the format: {}".format(self.START_DATE_FORMAT))
+
+    def parse_date(self, date_value):
+        """
+        Pass in string-formatted-datetime, parse the value, and return it as an unformatted datetime object.
+        """
+        date_formats = {
+            "%Y-%m-%dT%H:%M:%S.%fZ",
+            "%Y-%m-%dT%H:%M:%SZ",
+            "%Y-%m-%dT%H:%M:%S.%f+00:00",
+            "%Y-%m-%dT%H:%M:%S+00:00",
+            "%Y-%m-%d"
+        }
+        for date_format in date_formats:
+            try:
+                date_stripped = dt.strptime(date_value, date_format)
+                return date_stripped
+            except ValueError:
+                continue
+
+        raise NotImplementedError(
+            "Tests do not account for dates of this format: {}".format(date_value))

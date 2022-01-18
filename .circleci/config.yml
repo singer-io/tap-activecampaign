@@ -1,4 +1,6 @@
-version: 2
+version: 2.1
+orbs:
+  slack: circleci/slack@3.4.2
 jobs:
   build:
     docker:
@@ -11,7 +13,7 @@ jobs:
             python3 -mvenv /usr/local/share/virtualenvs/tap-activecampaign
             source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
             pip install -U 'pip<19.2' setuptools
-            pip install .[dev]
+            pip install .[test]
       - run:
           name: 'JSON Validator'
           command: |
@@ -41,7 +43,8 @@ jobs:
             source dev_env.sh
             source /usr/local/share/virtualenvs/tap-tester/bin/activate
             run-test --tap=tap-activecampaign tests
-
+      - slack/notify-on-failure:
+          only_for_branches: master
 workflows:
   version: 2
   commit:
@@ -49,6 +52,7 @@ workflows:
       - build:
           context:
             - circleci-user
+            - tap-tester-user
   build_daily:
     triggers:
       - schedule:
@@ -58,4 +62,7 @@ workflows:
               only:
                 - master
     jobs:
-      - build
+      - build:
+          context:
+            - circleci-user
+            - tap-tester-user
