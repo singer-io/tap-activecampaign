@@ -17,7 +17,7 @@
     "subject": {
       "type": ["null", "string"]
     },
-    "contant": {
+    "content": {
       "type": ["null", "string"]
     },
     "categoryid": {

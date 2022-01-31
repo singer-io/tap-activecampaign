@@ -28,7 +28,7 @@
     "reltype": {
       "type": ["null", "string"]
     },
-    "deal_task_type": {
+    "deal_tasktype": {
       "type": ["null", "integer"]
     },
     "cdate": {

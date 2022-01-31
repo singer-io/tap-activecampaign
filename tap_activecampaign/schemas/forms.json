@@ -171,7 +171,7 @@
     "cfields": {
       "anyOf": [
         {
-          "type": "null"
+          "type": ["null", "object"]
         },
         {
           "type": "array",
@@ -228,7 +228,7 @@
     "defaultscreenshot": {
       "type": ["null", "string"]
     },
-    "recents": {
+    "recent": {
       "anyOf": [
         {
           "type": "array",

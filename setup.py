@@ -12,7 +12,7 @@ setup(name='tap-activecampaign',
           'backoff==1.8.0',
           'requests==2.23.0',
           'pyhumps==1.3.1',
-          'singer-python==5.9.0'
+          'singer-python==5.12.2'
       ],
       entry_points='''
           [console_scripts]
@@ -27,8 +27,10 @@ setup(name='tap-activecampaign',
       },
       extras_require={
           'dev': [
-              'pylint',
               'ipdb',
+          ],
+          'test': [
+              'pylint',
               'nose',
           ]
       })

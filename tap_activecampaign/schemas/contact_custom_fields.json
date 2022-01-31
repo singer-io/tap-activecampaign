@@ -17,7 +17,7 @@
     "perstag": {
       "type": ["null", "string"]
     },
-    "defvalue": {
+    "defval": {
       "type": ["null", "string"]
     },
     "show_in_list": {

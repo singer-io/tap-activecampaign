@@ -2,7 +2,7 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "group_id": {
+    "groupid": {
       "type": ["null", "string"]
     },
     "site_name": {
@@ -38,13 +38,13 @@
     "help": {
       "type": ["null", "integer"]
     },
-    "admin_template_httm": {
+    "admin_template_htm": {
       "type": ["null", "string"]
     },
     "admin_template_css": {
       "type": ["null", "string"]
     },
-    "public_template_httm": {
+    "public_template_htm": {
       "type": ["null", "string"]
     },
     "public_template_css": {
