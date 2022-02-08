@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.1.1
+  * Bump to v0.1.1 to avoid PyPi file name reuse
+
 ## 0.1.0
   * Refactor code to class based [#8](https://github.com/singer-io/tap-activecampaign/pull/8)
   * Update all schemas [#10](https://github.com/singer-io/tap-activecampaign/pull/10)
