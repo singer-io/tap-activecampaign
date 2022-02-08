@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0
+## 0.1.0
   * Refactor code to class based [#8](https://github.com/singer-io/tap-activecampaign/pull/8)
   * Update all schemas [#10](https://github.com/singer-io/tap-activecampaign/pull/10)
   * Refactor Error Handling [#8] (https://github.com/singer-io/tap-activecampaign/pull/8)
