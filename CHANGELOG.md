@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.0
+  * Refactor code to class based [#8](https://github.com/singer-io/tap-activecampaign/pull/8)
+  * Update all schemas [#10](https://github.com/singer-io/tap-activecampaign/pull/10)
+  * Refactor Error Handling [#8] (https://github.com/singer-io/tap-activecampaign/pull/8)
+  * Check best practices and make replication key with automatic inclusion [#11](https://github.com/singer-io/tap-activecampaign/pull/11)
+  * Updated Documentation
+  * Official Beta Release
+
 ## 0.0.6
   * Fixed issue where a Connection Reset Error was not being retried [#4](https://github.com/singer-io/tap-activecampaign/pull/4)
 
