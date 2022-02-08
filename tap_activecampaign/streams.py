@@ -339,11 +339,8 @@ class ActiveCampaign:
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
         
-        if not data or data is None or data == {}: # No data results
-            LOGGER.info('No data for URL {}{}{}'.format(
-                self.client.base_url,
-                path,
-                '?{}'.format(querystring) if params else ''))
+        if not data or data is None or data == {}:
+            LOGGER.info('No data for URL {}{}{}'.format(self.client.base_url, path, querystring)) # No data results
         else: # has data
             transformed_data = self.transform_data(data)
             
