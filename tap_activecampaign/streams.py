@@ -504,6 +504,7 @@ class Contacts(ActiveCampaign):
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+    children= ['contact_custom_field_values', 'contact_automations']
 
 class ContactAutomations(ActiveCampaign):
     """
@@ -512,9 +513,10 @@ class ContactAutomations(ActiveCampaign):
     """
     stream_name = 'contact_automations'
     replication_keys = ['lastdate']
-    path = 'contactAutomations'
     data_key = 'contactAutomations'
     created_timestamp = 'adddate'
+    path = 'contacts/{}/contactAutomations'
+    parent = 'contacts'
 
 class ContactCustomFields(ActiveCampaign):
     """
@@ -556,6 +558,8 @@ class ContactCustomFieldValues(ActiveCampaign):
     path = 'fieldValues'
     data_key = 'fieldValues'
     created_timestamp = 'cdate'
+    path = 'contacts/{}/fieldValues'
+    parent = 'contacts'
 
 class ContactDeals(ActiveCampaign):
     """
