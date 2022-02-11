@@ -555,7 +555,6 @@ class ContactCustomFieldValues(ActiveCampaign):
     """
     stream_name = 'contact_custom_field_values'
     replication_keys = ['udate']
-    path = 'fieldValues'
     data_key = 'fieldValues'
     created_timestamp = 'cdate'
     path = 'contacts/{}/fieldValues'
