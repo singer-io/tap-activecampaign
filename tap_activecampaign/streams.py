@@ -225,7 +225,7 @@ class ActiveCampaign:
                 params[bookmark_query_field] = last_datetime
 
             if limit_to_start_date_query_field:
-                params[limit_to_start_date_query_field] = last_dttm
+                params[limit_to_start_date_query_field] = now_datetime
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
