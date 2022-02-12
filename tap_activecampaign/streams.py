@@ -36,6 +36,7 @@ class ActiveCampaign:
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
+    limit_to_start_date_query_field = None
     links = []
     children = []
     
@@ -187,6 +188,7 @@ class ActiveCampaign:
         data_key = self.data_key
         id_fields = self.key_properties
         bookmark_query_field = self.bookmark_query_field
+        limit_to_start_date_query_field = self.limit_to_start_date_query_field;
         created_timestamp_field = self.created_timestamp
         bookmark_field = next(iter(self.replication_keys or []), None)
         # Get the latest bookmark for the stream and set the last_integer/datetime
@@ -221,6 +223,9 @@ class ActiveCampaign:
 
             if bookmark_query_field:
                 params[bookmark_query_field] = last_datetime
+
+            if limit_to_start_date_query_field:
+                params[limit_to_start_date_query_field] = last_dttm
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
@@ -503,6 +508,7 @@ class Contacts(ActiveCampaign):
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
+    limit_to_start_date_query_field = 'filters[updated_before]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
     children= ['contact_custom_field_values', 'contact_automations']
 
