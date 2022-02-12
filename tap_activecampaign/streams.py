@@ -199,7 +199,7 @@ class ActiveCampaign:
         max_bookmark_value = last_datetime
         LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
             self.stream_name, bookmark_field, last_datetime))
-        now_datetime = utils.now()
+        now_datetime = self.transform_datetime(utils.now())
         last_dttm = strptime_to_utc(last_datetime)
         endpoint_total = 0
 
