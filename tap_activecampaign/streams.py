@@ -1073,7 +1073,9 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_orders': 'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products',
+    'contacts': 'contact_automations',
+    'contacts': 'contact_custom_field_values'
 }
 
 def flatten_streams():
