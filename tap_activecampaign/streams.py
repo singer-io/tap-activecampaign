@@ -510,7 +510,7 @@ class Contacts(ActiveCampaign):
     bookmark_query_field = 'filters[updated_after]'
     limit_to_start_date_query_field = 'filters[updated_before]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
-    children= ['contact_custom_field_values', 'contact_automations', 'contact_tags', 'contact_lists']
+    children= ['contact_custom_field_values', 'contact_automations', 'contact_tags', 'contact_lists', 'bounce_logs', 'activities']
 
 class ContactAutomations(ActiveCampaign):
     """
@@ -826,8 +826,9 @@ class Activities(ActiveCampaign):
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
-    path = 'activities'
     data_key = 'activities'
+    path = 'activities?contact={}'
+    parent = 'contacts'
 
 class AutomationBlocks(ActiveCampaign):
     """
@@ -845,9 +846,10 @@ class BounceLogs(ActiveCampaign):
     """
     stream_name = 'bounce_logs'
     replication_keys = ['updated_timestamp']
-    path = 'bounceLogs'
     data_key = 'bounceLogs'
     created_timestamp = 'created_timestamp'
+    path = 'contacts/{}/bounceLogs'
+    parent = 'contacts'
 
 class CampaignLists(ActiveCampaign):
     """
@@ -1079,7 +1081,9 @@ SUB_STREAMS = {
     'contacts-contact_automations': 'contact_automations',
     'contacts-contact_custom_field_values': 'contact_custom_field_values',
     'contacts-contact_tags': 'contact_tags',
-    'contacts-contact_lists': 'contact_lists'
+    'contacts-contact_lists': 'contact_lists',
+    'contacts-bounce_logs': 'bounce_logs',
+    'contacts-activities': 'activities'
 }
 
 def flatten_streams():
