@@ -510,7 +510,7 @@ class Contacts(ActiveCampaign):
     bookmark_query_field = 'filters[updated_after]'
     limit_to_start_date_query_field = 'filters[updated_before]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
-    children= ['contact_custom_field_values', 'contact_automations']
+    children= ['contact_custom_field_values', 'contact_automations', 'contact_tags', 'contact_lists']
 
 class ContactAutomations(ActiveCampaign):
     """
@@ -902,9 +902,10 @@ class ContactLists(ActiveCampaign):
     """
     stream_name = 'contact_lists'
     replication_keys = ['updated_timestamp']
-    path = 'contactLists'
     data_key = 'contactLists'
     created_timestamp = 'created_timestamp'
+    path = 'contacts/{}/contactLists'
+    parent = 'contacts'
 
 class ContactTags(ActiveCampaign):
     """
@@ -912,9 +913,10 @@ class ContactTags(ActiveCampaign):
     """
     stream_name = 'contact_tags'
     replication_keys = ['updated_timestamp']
-    path = 'contactTags'
     data_key = 'contactTags'
     created_timestamp = 'created_timestamp'
+    path = 'contacts/{}/contactTags'
+    parent = 'contacts'
 
 class ContactConversions(ActiveCampaign):
     """
@@ -1075,7 +1077,9 @@ STREAMS = {
 SUB_STREAMS = {
     'ecommerce_orders': 'ecommerce_order_products',
     'contacts-contact_automations': 'contact_automations',
-    'contacts-contact_custom_field_values': 'contact_custom_field_values'
+    'contacts-contact_custom_field_values': 'contact_custom_field_values',
+    'contacts-contact_tags': 'contact_tags',
+    'contacts-contact_lists': 'contact_lists'
 }
 
 def flatten_streams():
