@@ -1,7 +1,11 @@
 # Changelog
 
+## 0.3.2
+  * Fix the transformation error of forms stream [#22](https://github.com/singer-io/tap-activecampaign/pull/22)
+
 ## 0.3.1
   * Breakdown of Sync method for better readability of code[#16](https://github.com/singer-io/tap-activecampaign/pull/16)
+
 ## 0.3.0
   * Refactor code to class based [#8](https://github.com/singer-io/tap-activecampaign/pull/8)
   * Update all schemas [#10](https://github.com/singer-io/tap-activecampaign/pull/10)
