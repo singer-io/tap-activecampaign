@@ -852,6 +852,7 @@ class Activities(ActiveCampaign):
     path = 'activities'
     data_key = 'activities'
     bookmark_query_field = 'after'
+    params = {'orders[tstamp]': 'asc'}
 
 class AutomationBlocks(ActiveCampaign):
     """
