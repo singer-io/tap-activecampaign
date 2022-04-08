@@ -33,7 +33,7 @@ def get_response(status_code, json={}, raise_error=False, headers=None):
 
 class TestActivitiesStreamParams(unittest.TestCase):
     """
-        Test case to verify the params `after` and `orders` is set as expected for activities during API call
+        Test case to verify the param `after` is set as expected for activities during API call
     """
 
     @mock.patch('requests.Session.request')
@@ -63,5 +63,3 @@ class TestActivitiesStreamParams(unittest.TestCase):
 
         # verify the 'after' param is used with start date
         self.assertTrue('after=2022-04-01' in params)
-        # verify the 'orders' param is used
-        self.assertTrue('orders[tstamp]=asc' in params)
