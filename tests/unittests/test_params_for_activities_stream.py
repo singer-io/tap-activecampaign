@@ -32,13 +32,13 @@ def get_response(status_code, json={}, raise_error=False, headers=None):
     return Mockresponse(status_code, json, raise_error, headers)
 
 class TestActivitiesStreamParams(unittest.TestCase):
-    """
-        Test case to verify the param `after` is set as expected for activities during API call
-    """
 
     @mock.patch('requests.Session.request')
     @mock.patch('tap_activecampaign.streams.Activities.process_records')
     def test_activities_stream_params(self, mocked_process_records, mocked_request):
+        """
+            Test case to verify the param `after` is set as expected for activities during API call
+        """
         # mock request and return value
         mocked_request.return_value = get_response(200, {
             "activities": [],
