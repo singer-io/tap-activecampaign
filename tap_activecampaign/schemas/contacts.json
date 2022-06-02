@@ -9,6 +9,9 @@
     "email": {
       "type": ["null", "string"]
     },
+    "phone": {
+      "type": ["null", "string"]
+    },
     "first_name": {
       "type": ["null", "string"]
     },
