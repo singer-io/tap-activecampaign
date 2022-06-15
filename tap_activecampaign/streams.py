@@ -851,6 +851,7 @@ class Activities(ActiveCampaign):
     replication_keys = ['tstamp']
     path = 'activities'
     data_key = 'activities'
+    bookmark_query_field = 'after'
 
 class AutomationBlocks(ActiveCampaign):
     """
