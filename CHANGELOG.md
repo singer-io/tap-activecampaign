@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.3
+  * Added after param for activities stream [#24](https://github.com/singer-io/tap-activecampaign/pull/24)
+
 ## 0.3.2
   * Fix the transformation error of forms stream [#22](https://github.com/singer-io/tap-activecampaign/pull/22)
 
