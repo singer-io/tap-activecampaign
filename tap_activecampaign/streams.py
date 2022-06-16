@@ -829,6 +829,7 @@ class Activities(ActiveCampaign):
     data_key = 'activities'
     path = 'activities?contact={}'
     parent = 'contacts'
+    bookmark_query_field = 'after'
 
 class AutomationBlocks(ActiveCampaign):
     """
