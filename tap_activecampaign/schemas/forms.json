@@ -233,7 +233,7 @@
         {
           "type": "array",
           "items": {
-            "type": ["null", "object"],
+            "type": ["null", "object", "string"],
             "additionalProperties": true,
             "properties": {
               "id": {}
