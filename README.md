@@ -8,7 +8,7 @@ This tap:
 
 - Pulls raw data from the [ActiveCampaign v3 API](https://developers.activecampaign.com/reference#overview)
 - Extracts the following resources:
-  - [accounts](https: //developers.activecampaign.com/reference#list-all-accounts)
+  - [accounts](https://developers.activecampaign.com/reference#list-all-accounts)
   - [account_contacts](https://developers.activecampaign.com/reference#list-all-associations-1)
   - [account_custom_fields](https://developers.activecampaign.com/reference#list-all-custom-fields)
   - [account_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values-2)
@@ -38,7 +38,7 @@ This tap:
 - Incrementally pulls data based on the input state
 
 ## Streams
-[accounts](https: //developers.activecampaign.com/reference#list-all-accounts)
+[accounts](https://developers.activecampaign.com/reference#list-all-accounts)
 - Endpoint: https://{subdomain}.api-us1.com/accounts
 - Data key: accounts
 - Primary keys: id
