@@ -108,9 +108,6 @@
     "anonymized": {
       "type": ["null", "integer"]
     },
-    "email_empty": {
-      "type": ["null", "boolean"]
-    },
     "created_utc_timestamp": {
       "type": ["null", "string"],
       "format": "date-time"

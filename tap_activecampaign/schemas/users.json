@@ -23,18 +23,6 @@
     "local_zoneid": {
       "type": ["null", "string"]
     },
-    "password_updated_utc_timestamp": {
-      "type": ["null", "string"],
-      "format": "date-time"
-    },
-    "cdate": {
-      "type": ["null", "string"],
-      "format": "date-time"
-    },
-    "udate": {
-      "type": ["null", "string"],
-      "format": "date-time"
-    },
     "mfa_enabled": {
       "type": ["null", "integer"]
     },
