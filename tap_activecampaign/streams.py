@@ -159,7 +159,7 @@ class ActiveCampaign:
                         bookmark_dttm = self.transform_datetime(transformed_record[bookmark_field])
                         # Keep only records whose bookmark is after the last_datetime
                         if bookmark_dttm:
-                            if bookmark_dttm > last_dttm:
+                            if bookmark_dttm >= last_dttm:
                                 self.write_record(stream_name, transformed_record, \
                                     time_extracted=time_extracted)
                                 counter.increment()
