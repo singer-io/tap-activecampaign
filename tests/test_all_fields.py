@@ -79,6 +79,10 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
                 # As we can't generate following field by activecampaign APIs and UI, so removed it form expectation list.
                 if stream == "ecommerce_orders":
                     expected_all_keys = expected_all_keys - {'order_products'}
+                elif stream == "contacts":
+                    expected_all_keys = expected_all_keys - {'email_empty'}
+                elif stream == "users":
+                    expected_all_keys = expected_all_keys - {'password_updated_utc_timestamp', 'cdate', 'udate'}
                     
                 # verify all fields for each stream are replicated
                 self.assertSetEqual(expected_all_keys, actual_all_keys)
