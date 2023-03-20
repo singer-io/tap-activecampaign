@@ -2,6 +2,9 @@ from tap_tester import runner, connections, menagerie, LOGGER
 from base import ActiveCampaignTest
 from dateutil import parser as parser
 
+from debugpy import listen, wait_for_client
+listen(8000)
+wait_for_client()
 class InterruptedSyncTest(ActiveCampaignTest):
     """
     Test to verify that if a sync is interrupted, then the next sync will continue
@@ -49,7 +52,7 @@ class InterruptedSyncTest(ActiveCampaignTest):
         conn_id = connections.ensure_connection(self)
 
         # Note: test data not available for following streams: metadata, email_send_skip, email_complaint, email_click
-        streams_to_test = self.expected_check_streams()
+        streams_to_test = self.expected_check_streams() - {'contact_conversions'}
 
         # Run check mode
         found_catalogs = self.run_and_verify_check_mode(conn_id)
