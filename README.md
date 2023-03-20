@@ -8,28 +8,28 @@ This tap:
 
 - Pulls raw data from the [ActiveCampaign v3 API](https://developers.activecampaign.com/reference#overview)
 - Extracts the following resources:
-  - [accounts](https://developers.activecampaign.com/reference#list-all-accounts)
-  - [account_contacts](https://developers.activecampaign.com/reference#list-all-associations-1)
-  - [account_custom_fields](https://developers.activecampaign.com/reference#list-all-custom-fields)
-  - [account_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values-2)
-  - [addresses](https://developers.activecampaign.com/reference#list-all-addresses)
-  - [automations](https://developers.activecampaign.com/reference#list-all-automations)
-  - [brandings](https://developers.activecampaign.com/reference#brandings)
-  - [calendars](https://developers.activecampaign.com/reference#list-all-calendar-feeds)
-  - [campaigns](https://developers.activecampaign.com/reference#list-all-campaigns)
-  - [campaign_links](https://developers.activecampaign.com/reference#retrieve-links-associated-campaign)
-  - [contacts](https://developers.activecampaign.com/reference#list-all-contacts)
-  - [contact_automations](https://developers.activecampaign.com/reference#list-all-contact-automations)
-  - [contact_custom_fields](hhttps://developers.activecampaign.com/reference#retrieve-fields-1)
-  - [contact_custom_field_options](https://developers.activecampaign.com/reference#retrieve-fields-1)
-  - [contact_custom_field_rels](https://developers.activecampaign.com/reference#retrieve-fields-1)
-  - [contact_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values-1)
-  - [contact_deals](ttps://developers.activecampaign.com/reference#list-all-secondary-contacts)
-  - [deals](https://developers.activecampaign.com/reference#list-all-deals)
-  - [deal_stages](https://developers.activecampaign.com/reference#list-all-deal-stages)
-  - [deal_groups](https://developers.activecampaign.com/reference#list-all-pipelines)
-  - [deal_custom_fields](https://developers.activecampaign.com/reference#retrieve-all-dealcustomfielddata-resources)
-  - [deal_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values)
+  - [accounts](https://developers.activecampaign.com/reference/list-all-accounts)
+  - [account_contacts](https://developers.activecampaign.com/reference/list-all-associations-1)
+  - [account_custom_fields](https://developers.activecampaign.com/reference/list-all-custom-fields-meta)
+  - [account_custom_field_values](https://developers.activecampaign.com/reference/list-all-custom-field-values-2)
+  - [addresses](https://developers.activecampaign.com/reference/list-all-addresses)
+  - [automations](https://developers.activecampaign.com/reference/list-all-automations)
+  - [brandings](https://developers.activecampaign.com/reference/get-branding)
+  - [calendars](https://developers.activecampaign.com/reference/list-all-calendar-feeds)
+  - [campaigns](https://developers.activecampaign.com/reference/list-all-campaigns)
+  - [campaign_links](https://developers.activecampaign.com/reference/retrieve-links-associated-campaign)
+  - [contacts](https://developers.activecampaign.com/reference/list-all-contacts)
+  - [contact_automations](https://developers.activecampaign.com/reference/list-all-contact-automations)
+  - [contact_custom_fields](https://developers.activecampaign.com/reference/retrieve-fields)
+  - [contact_custom_field_options](https://developers.activecampaign.com/reference/retrieve-fields)
+  - [contact_custom_field_rels](https://developers.activecampaign.com/reference/retrieve-fields)
+  - [contact_custom_field_values](https://developers.activecampaign.com/reference/retrieve-fields)
+  - [contact_deals](https://developers.activecampaign.com/reference/list-all-secondary-contacts)
+  - [deals](https://developers.activecampaign.com/reference/list-all-deals)
+  - [deal_stages](https://developers.activecampaign.com/reference/list-all-deal-stages)
+  - [deal_groups](https://developers.activecampaign.com/reference/list-all-pipelines)
+  - [deal_custom_fields](https://developers.activecampaign.com/reference/retrieve-all-custom-deal-field-meta)
+  - [deal_custom_field_values](https://developers.activecampaign.com/reference/list-all-custom-fielddata-field-values)
 
 
 
@@ -38,7 +38,7 @@ This tap:
 - Incrementally pulls data based on the input state
 
 ## Streams
-[accounts](https://developers.activecampaign.com/reference#list-all-accounts)
+[accounts](https://developers.activecampaign.com/reference/list-all-accounts)
 - Endpoint: https://{subdomain}.api-us1.com/accounts
 - Data key: accounts
 - Primary keys: id
@@ -46,7 +46,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[account_contacts](https://developers.activecampaign.com/reference#list-all-associations-1)
+[account_contacts](https://developers.activecampaign.com/reference/list-all-associations-1)
 - Endpoint: https://{subdomain}.api-us1.com/accountContacts
 - Data key: accountContacts
 - Primary keys: id
@@ -54,7 +54,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[account_custom_fields](https://developers.activecampaign.com/reference#list-all-custom-fields)
+[account_custom_fields](https://developers.activecampaign.com/reference/list-all-custom-fields-meta)
 - Endpoint: https://{subdomain}.api-us1.com/accountCustomFieldMeta
 - Data key: accountCustomFieldMeta
 - Primary keys: id
@@ -62,7 +62,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[account_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values-2)
+[account_custom_field_values](https://developers.activecampaign.com/reference/list-all-custom-field-values-2)
 - Endpoint: https://{subdomain}.api-us1.com/accountCustomFieldData
 - Data key: accountCustomFieldData
 - Primary keys: id
@@ -70,28 +70,28 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[addresses](https://developers.activecampaign.com/reference#list-all-addresses)
+[addresses](https://developers.activecampaign.com/reference/list-all-addresses)
 - Endpoint: https://{subdomain}.api-us1.com/addresses
 - Data key: addresses
 - Primary keys: id
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[automations](https://developers.activecampaign.com/reference#list-all-automations)
+[automations](https://developers.activecampaign.com/reference/list-all-automations)
 - Endpoint: https://{subdomain}.api-us1.com/automations
 - Primary keys: id
 - Replication strategy: Incremental (query all, filter results)
   - Bookmark: mdate
 - Transformations: camelCase to snake_case, remove links node
 
-[brandings](https://developers.activecampaign.com/reference#brandings)
+[brandings](https://developers.activecampaign.com/reference/get-branding)
 - Endpoint: https://{subdomain}.api-us1.com/brandings
 - Data key: brandings
 - Primary keys: id
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[calendars](https://developers.activecampaign.com/reference#list-all-calendar-feeds)
+[calendars](https://developers.activecampaign.com/reference/list-all-calendar-feeds)
 - Endpoint: https://{subdomain}.api-us1.com/calendars
 - Data key: calendars
 - Primary keys: id
@@ -99,7 +99,7 @@ This tap:
   - Bookmark: mdate
 - Transformations: camelCase to snake_case, remove links node
 
-[campaigns](https://developers.activecampaign.com/reference#list-all-campaigns)
+[campaigns](https://developers.activecampaign.com/reference/list-all-campaigns)
 - Endpoint: https://{subdomain}.api-us1.com/campaigns
 - Data key: campaigns
 - Primary keys: id
@@ -107,7 +107,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[campaign_links](https://developers.activecampaign.com/reference#retrieve-links-associated-campaign)
+[campaign_links](https://developers.activecampaign.com/reference/retrieve-links-associated-campaign)
 - Endpoint: https://{subdomain}.api-us1.com/links
 - Data key: links
 - Primary keys: id
@@ -115,7 +115,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[contacts](https://developers.activecampaign.com/reference#list-all-contacts)
+[contacts](https://developers.activecampaign.com/reference/list-all-contacts)
 - Endpoint: https://{subdomain}.api-us1.com/contacts
 - Data key: contacts
 - Primary keys: id
@@ -124,7 +124,7 @@ This tap:
   - Bookmark query fields: updated_after
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_automations](https://developers.activecampaign.com/reference#list-all-contact-automations)
+[contact_automations](https://developers.activecampaign.com/reference/list-all-contact-automations)
 - Endpoint: https://{subdomain}.api-us1.com/contactAutomations
 - Data key: contactAutomations
 - Primary keys: id
@@ -132,28 +132,28 @@ This tap:
   - Bookmark: lastdate
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_custom_fields](hhttps://developers.activecampaign.com/reference#retrieve-fields-1)
+[contact_custom_fields](https://developers.activecampaign.com/reference/retrieve-fields)
 - Endpoint: https://{subdomain}.api-us1.com/fields
 - Data key: fields
 - Primary keys: id
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_custom_field_options](https://developers.activecampaign.com/reference#retrieve-fields-1)
+[contact_custom_field_options](https://developers.activecampaign.com/reference/retrieve-fields)
 - Endpoint: https://{subdomain}.api-us1.com/fields
 - Data key: fieldOptions
 - Primary keys: id
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_custom_field_rels](https://developers.activecampaign.com/reference#retrieve-fields-1)
+[contact_custom_field_rels](https://developers.activecampaign.com/reference/retrieve-fields)
 - Endpoint: https://{subdomain}.api-us1.com/fields
 - Data key: fieldRels
 - Primary keys: id
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values-1)
+[contact_custom_field_values](https://developers.activecampaign.com/reference/retrieve-fields)
 - Endpoint: https://{subdomain}.api-us1.com/fieldValues
 - Data key: fieldValues
 - Primary keys: id
@@ -161,7 +161,7 @@ This tap:
   - Bookmark: udate
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_deals](ttps://developers.activecampaign.com/reference#list-all-secondary-contacts)
+[contact_deals](https://developers.activecampaign.com/reference/list-all-secondary-contacts)
 - Endpoint: https://{subdomain}.api-us1.com/contactDeals
 - Data key: contactDeals
 - Primary keys: id
@@ -169,7 +169,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[deal_stages](https://developers.activecampaign.com/reference#list-all-deal-stages)
+[deal_stages](https://developers.activecampaign.com/reference/list-all-deal-stages)
 - Endpoint: https://{subdomain}.api-us1.com/dealStages
 - Data key: dealStages
 - Primary keys: id
@@ -178,7 +178,7 @@ This tap:
 - Transformations: camelCase to snake_case, remove links node
 
 
-[deal_groups](https://developers.activecampaign.com/reference#list-all-pipelines)
+[deal_groups](https://developers.activecampaign.com/reference/list-all-pipelines)
 - Endpoint: https://{subdomain}.api-us1.com/dealGroups
 - Data key: dealGroups
 - Primary keys: id
@@ -186,7 +186,7 @@ This tap:
   - Bookmark: udate
 - Transformations: camelCase to snake_case, remove links node
 
-[deal_custom_fields](https://developers.activecampaign.com/reference#retrieve-all-dealcustomfielddata-resources)
+[deal_custom_fields](https://developers.activecampaign.com/reference/retrieve-all-custom-deal-field-meta)
 - Endpoint: https://{subdomain}.api-us1.com/dealCustomFieldMeta
 - Data key: dealCustomFieldMeta
 - Primary keys: id
@@ -194,7 +194,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[deal_custom_field_values](https://developers.activecampaign.com/reference#list-all-custom-field-values)
+[deal_custom_field_values](https://developers.activecampaign.com/reference/list-all-custom-fielddata-field-values)
 - Endpoint: https://{subdomain}.api-us1.com/dealCustomFieldData
 - Data key: dealCustomFieldData
 - Primary keys: id
@@ -202,7 +202,7 @@ This tap:
   - Bookmark: updated_timestamp
 - Transformations: camelCase to snake_case, remove links node
 
-[deals](https://developers.activecampaign.com/reference#list-all-deals)
+[deals](https://developers.activecampaign.com/reference/list-all-deals)
 - Endpoint: https://{subdomain}.api-us1.com/deals
 - Data key: deals
 - Primary keys: id
