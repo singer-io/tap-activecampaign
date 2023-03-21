@@ -2,9 +2,6 @@ from tap_tester import runner, connections, menagerie, LOGGER
 from base import ActiveCampaignTest
 from dateutil import parser as parser
 
-from debugpy import listen, wait_for_client
-listen(8000)
-wait_for_client()
 class InterruptedSyncTest(ActiveCampaignTest):
     """
     Test to verify that if a sync is interrupted, then the next sync will continue
