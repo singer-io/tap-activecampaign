@@ -9,7 +9,7 @@ class InterruptedSyncTest(ActiveCampaignTest):
     """
 
     def name(self):
-        return "tap_interrupted_sync_test"
+        return "tap_activecampaign_interrupted_sync_test"
 
     def test_name(self):
         LOGGER.info("Interrupted Sync test for tap-activecampaign")
@@ -48,8 +48,8 @@ class InterruptedSyncTest(ActiveCampaignTest):
 
         conn_id = connections.ensure_connection(self)
 
-        # Note: test data not available for following streams: metadata, email_send_skip, email_complaint, email_click
-        streams_to_test = self.expected_check_streams() - {'contact_conversions'}
+        # Note: test data not available for following streams: contact_conversions, sms
+        streams_to_test = self.expected_check_streams() - {'contact_conversions', 'sms'}
 
         # Run check mode
         found_catalogs = self.run_and_verify_check_mode(conn_id)
