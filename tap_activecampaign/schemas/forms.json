@@ -114,7 +114,7 @@
           "additionalProperties": false,
           "properties": {
             "padding": {
-              "type": ["null", "integer"]
+              "type": ["null", "integer", "string"]
             },
             "background": {
               "type": ["null", "string"]
