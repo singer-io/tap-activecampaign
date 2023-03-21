@@ -413,6 +413,19 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
+    @patch("requests.Session.get", side_effect=ConnectionResetError(104, 'Connection reset by peer'))
+    def test_enter_method_handle_connection_reset_error(self, mocked_request, mock_sleep):
+        """
+        Test that `__enter__` method retry ConnectionResetError(104) with Exception 5 times.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+
+        with self.assertRaises(ConnectionResetError) as e:
+            _client.__enter__()
+
+        # Verify that requests.Session.get called 5 times
+        self.assertEqual(mocked_request.call_count, 5)
+
     @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")    
     @patch("requests.Session.request", side_effect=mock_send_429)
     def test_request_method_handle_429_exception(self, mocked_request, mock_api_token, mock_sleep):
@@ -506,6 +519,20 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
     
         with self.assertRaises(Exception) as e:
+            _client.request("base_url")
+
+        # Verify that requests.Session.request called 5 times
+        self.assertEqual(mocked_request.call_count, 5)
+
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
+    @patch("requests.Session.request", side_effect=ConnectionResetError(104, 'Connection reset by peer'))
+    def test_request_method_handle_connection_reset_error(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method retry ConnectionResetError(104) with Exception 5 times.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+
+        with self.assertRaises(ConnectionResetError) as e:
             _client.request("base_url")
 
         # Verify that requests.Session.request called 5 times
