@@ -5,6 +5,12 @@ from base import ActiveCampaignTest
 
 class ActiveCampaignAllFields(ActiveCampaignTest):
     """Ensure running the tap with all streams and fields selected results in the replication of all fields."""
+
+    MISSING_FIELDS = {
+        "ecommerce_orders": {'order_products'},
+        "contacts": {'email_empty'},
+        "users": {'password_updated_utc_timestamp', 'cdate', 'udate'}
+        }
      
     def name(self):
         return "activecampaign_all_fields"
@@ -77,12 +83,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
                         actual_all_keys.update(message['data'].keys())
 
                 # As we can't generate following field by activecampaign APIs and UI, so removed it form expectation list.
-                if stream == "ecommerce_orders":
-                    expected_all_keys = expected_all_keys - {'order_products'}
-                elif stream == "contacts":
-                    expected_all_keys = expected_all_keys - {'email_empty'}
-                elif stream == "users":
-                    expected_all_keys = expected_all_keys - {'password_updated_utc_timestamp', 'cdate', 'udate'}
+                expected_all_keys = expected_all_keys - self.MISSING_FIELDS.get(stream, set())
                     
                 # verify all fields for each stream are replicated
                 self.assertSetEqual(expected_all_keys, actual_all_keys)

@@ -1,6 +1,5 @@
 from tap_tester import runner, connections, menagerie, LOGGER
 from base import ActiveCampaignTest
-from dateutil import parser as parser
 
 class InterruptedSyncTest(ActiveCampaignTest):
     """
@@ -213,6 +212,12 @@ class InterruptedSyncTest(ActiveCampaignTest):
                             self.assertIn(record, first_sync_stream_records,
                                           msg="Unexpected record replicated in resuming sync.")
                     else:
-                        # FULL_TABLE stream records should be same
+                        # Verify full table streams do not save bookmarked values at the conclusion of a succesful sync
+                        self.assertNotIn(stream, first_sync_bookmarks['bookmarks'].keys())
+                        self.assertNotIn(stream, post_interrupted_sync_state['bookmarks'].keys())
+
+                        # For Full table stream, Verify first and second sync have the same records
                         self.assertEqual(interrupted_record_count, full_sync_record_count,
                                          msg=f"Record count of streams with {self.FULL_TABLE} replication method must be equal.")
+                        for rec in post_interrupted_sync_stream_records:
+                            self.assertIn(rec, first_sync_stream_records, msg='full table record in interrupted sync not found in full sync')

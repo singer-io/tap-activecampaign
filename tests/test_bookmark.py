@@ -108,6 +108,11 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
                         iter(expected_replication_keys[stream]))
 
                     simulated_bookmark_value = new_states['bookmarks'][stream]
+
+                    self.assertIsInstance(first_bookmark_value, str)
+                    self.assertIsInstance(second_bookmark_value, str)
+                    self.assertIsDateFormat(first_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
+                    self.assertIsDateFormat(second_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
                     
                     # Verify the first sync sets a bookmark of the expected form
                     self.assertIsNotNone(first_bookmark_value)

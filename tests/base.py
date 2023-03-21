@@ -606,7 +606,8 @@ class ActiveCampaignTest(unittest.TestCase):
         raise NotImplementedError(
             "Tests do not account for dates of this format: {}".format(date_value))
     
-    def assertIsDateFormat(self, value, str_format):
+    @staticmethod
+    def assertIsDateFormat(value, str_format):
         """Assertion Method that verifies a string value is a formatted
         datetime with the specified format."""
         try:
