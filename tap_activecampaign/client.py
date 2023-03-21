@@ -235,7 +235,11 @@ class ActiveCampaignClient(object):
         except Exception as err:
             LOGGER.error('{}'.format(err))
             LOGGER.error('response content: {}'.format(response.content))
-            raise Exception(err)
+            if response.content != b"":
+                raise Exception(err)
+
+            # Handling empty response b'' given by ActiveCampaign APIs
+            response_json = {}
 
         return response_json
 

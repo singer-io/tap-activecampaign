@@ -187,6 +187,21 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         self.assertEqual(str(e.exception), expected_error_message)
 
 
+    @patch("time.sleep")
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
+    @patch("requests.Session.request", return_value=Mockresponse("", 200, content=b""))
+    def test_request_with_handling_for_empty_content(self, mocked_request, mock_api_token, mock_sleep):
+        """
+        Test that `request` method gives empty json `{}` response when content is empty for a 200 response.
+        """
+        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+
+        response = _client.request("base_url")
+
+        # Verifying the empty response
+        self.assertEqual({}, response)
+
+
 class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
 
     @patch("requests.Session.get", side_effect=mock_send_400)
