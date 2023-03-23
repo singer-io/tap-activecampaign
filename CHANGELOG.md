@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.0
+  * Changes in doc links in README [#33](https://github.com/singer-io/tap-activecampaign/pull/33)
+  * Fix existing integration tests and add interrupted sync test [#35](https://github.com/singer-io/tap-activecampaign/pull/35)
+  * Load data with same datetime as last bookmark [#34](https://github.com/singer-io/tap-activecampaign/pull/34)
+  * Handle ChunkEncodingError & JSONDecodeError [#36](https://github.com/singer-io/tap-activecampaign/pull/36)
+  * Fix Nonetype error for no records [#37](https://github.com/singer-io/tap-activecampaign/pull/37)
+  * Add phone to list of supported fields [#26](https://github.com/singer-io/tap-activecampaign/pull/26)
+  * Add string type for forms style.button.padding [#28](https://github.com/singer-io/tap-activecampaign/pull/28)
+
 ## 0.3.3
   * Added after param for activities stream [#24](https://github.com/singer-io/tap-activecampaign/pull/24)
 
