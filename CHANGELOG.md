@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.1
+  * Remove integer type for forms style.button.padding [#39](https://github.com/singer-io/tap-activecampaign/pull/39)
+
 ## 1.0.0
   * Add phone to list of supported fields [#26](https://github.com/singer-io/tap-activecampaign/pull/26)
   * Add string type for forms style.button.padding [#28](https://github.com/singer-io/tap-activecampaign/pull/28)
