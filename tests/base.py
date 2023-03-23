@@ -18,6 +18,7 @@ class ActiveCampaignTest(unittest.TestCase):
     FULL_TABLE = "FULL_TABLE"
     INCREMENTAL = "INCREMENTAL"
     OBEYS_START_DATE = "obey-start-date"
+    BOOKMARK_COMPARISON_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
     def tap_name(self):
         """The name of the tap"""
@@ -558,7 +559,7 @@ class ActiveCampaignTest(unittest.TestCase):
             days, hours, minutes = timedelta_by_stream[stream]
             calculated_state_as_datetime = state_as_datetime - timedelta(days=days, hours=hours, minutes=minutes)
 
-            calculated_state_formatted = dt.strftime(calculated_state_as_datetime, self.START_DATE_FORMAT)
+            calculated_state_formatted = dt.strftime(calculated_state_as_datetime, self.BOOKMARK_COMPARISON_FORMAT)
 
             stream_to_calculated_state[stream] = calculated_state_formatted
 
@@ -604,3 +605,12 @@ class ActiveCampaignTest(unittest.TestCase):
 
         raise NotImplementedError(
             "Tests do not account for dates of this format: {}".format(date_value))
+    
+    @staticmethod
+    def assertIsDateFormat(value, str_format):
+        """Assertion Method that verifies a string value is a formatted
+        datetime with the specified format."""
+        try:
+            dt.strptime(value, str_format)
+        except ValueError as err:
+            raise AssertionError(f"Value: {value} does not conform to expected format: {str_format}") from err

@@ -2,10 +2,6 @@ import tap_tester.connections as connections
 import tap_tester.runner as runner
 from base import ActiveCampaignTest
 from tap_tester import menagerie
-from datetime import datetime
-import uuid
-import os
-import time
 
 class ActiveCampaignBookMark(ActiveCampaignTest):
     """Test tap sets a bookmark and respects it for the next sync of a stream"""
@@ -101,20 +97,19 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
                                         if record.get('action') == 'upsert']
                 first_bookmark_value = first_sync_bookmarks.get('bookmarks', {stream: None}).get(stream)
                 second_bookmark_value = second_sync_bookmarks.get('bookmarks', {stream: None}).get(stream)
-                
 
                 if expected_replication_method == self.INCREMENTAL:
 
                     # collect information specific to incremental streams from syncs 1 & 2
                     replication_key = next(
                         iter(expected_replication_keys[stream]))
-                    first_bookmark_value_utc = self.convert_state_to_utc(
-                        first_bookmark_value)
-                    second_bookmark_value_utc = self.convert_state_to_utc(
-                        second_bookmark_value)
 
-                    
-                    simulated_bookmark_value = self.convert_state_to_utc(new_states['bookmarks'][stream])
+                    simulated_bookmark_value = new_states['bookmarks'][stream]
+
+                    self.assertIsInstance(first_bookmark_value, str)
+                    self.assertIsInstance(second_bookmark_value, str)
+                    self.assertIsDateFormat(first_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
+                    self.assertIsDateFormat(second_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
                     
                     # Verify the first sync sets a bookmark of the expected form
                     self.assertIsNotNone(first_bookmark_value)
@@ -130,9 +125,9 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
 
                         # Verify the first sync bookmark value is the max replication key value for a given stream
                         replication_key_value = record.get(replication_key)
-   
+
                         self.assertLessEqual(
-                            replication_key_value, first_bookmark_value_utc,
+                            replication_key_value, first_bookmark_value,
                             msg="First sync bookmark was set incorrectly, a record with a greater replication-key value was synced."
                         )
                     
@@ -145,7 +140,7 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
 
                         # Verify the second sync bookmark value is the max replication key value for a given stream
                         self.assertLessEqual(
-                            replication_key_value, second_bookmark_value_utc,
+                            replication_key_value, second_bookmark_value,
                             msg="Second sync bookmark was set incorrectly, a record with a greater replication-key value was synced."
                         )
 
