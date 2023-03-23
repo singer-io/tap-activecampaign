@@ -87,6 +87,8 @@ def should_retry_error(exception):
         # Tap raises Exception: ConnectionResetError(104, 'Connection reset by peer'). That's why we are retrying this error also.
         # Reference: https://app.circleci.com/pipelines/github/singer-io/tap-activecampaign/554/workflows/d448258e-20df-4e66-b2aa-bc8bd1f08912/jobs/558
         return True
+    elif type(exception) == ConnectionResetError:
+        return True
     else:
         return False
 
@@ -235,7 +237,11 @@ class ActiveCampaignClient(object):
         except Exception as err:
             LOGGER.error('{}'.format(err))
             LOGGER.error('response content: {}'.format(response.content))
-            raise Exception(err)
+            if response.content != b"":
+                raise err
+
+            # Handling empty response b'' given by ActiveCampaign APIs
+            response_json = {}
 
         return response_json
 
