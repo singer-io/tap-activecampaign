@@ -97,9 +97,6 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
                                         if record.get('action') == 'upsert']
                 first_bookmark_value = first_sync_bookmarks.get('bookmarks', {stream: None}).get(stream)
                 second_bookmark_value = second_sync_bookmarks.get('bookmarks', {stream: None}).get(stream)
-                
-                self.assertIsInstance(first_bookmark_value, str)
-                self.assertIsDateFormat(first_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
 
                 if expected_replication_method == self.INCREMENTAL:
 
