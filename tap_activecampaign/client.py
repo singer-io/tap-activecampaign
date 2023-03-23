@@ -79,7 +79,7 @@ def should_retry_error(exception):
         Return true if exception is required to retry otherwise return false
     """
 
-    if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error):
+    if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error) or isinstance(exception, ActiveCampaignForbiddenError):
         # Retry Server5xxError and Server429Error exception. Retry exception if it is child class of OSError.
         # OSError is Parent class of ConnectionError, ConnectionResetError, TimeoutError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
         return True

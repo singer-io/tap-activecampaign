@@ -36,6 +36,7 @@ class ActiveCampaign:
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
+    limit_to_start_date_query_field = None
     links = []
     children = []
     
@@ -185,6 +186,7 @@ class ActiveCampaign:
 
         static_params = self.params
         bookmark_query_field = self.bookmark_query_field
+        limit_to_start_date_query_field = self.limit_to_start_date_query_field
         bookmark_field = next(iter(self.replication_keys or []), None)
         # Get the latest bookmark for the stream and set the last_integer/datetime
         last_datetime = None
@@ -194,8 +196,9 @@ class ActiveCampaign:
         max_bookmark_value = last_datetime
         LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
             self.stream_name, bookmark_field, last_datetime))
-        now_datetime = utils.now()
-        last_dttm = strptime_to_utc(last_datetime)
+        # now_datetime = utils.now()
+        # last_dttm = strptime_to_utc(last_datetime)
+        now_datetime = utils.now().strftime('%Y-%m-%dT%H:%M:%SZ')
         endpoint_total = 0
 
         # pagination: loop thru all pages of data
@@ -218,6 +221,9 @@ class ActiveCampaign:
 
             if bookmark_query_field:
                 params[bookmark_query_field] = last_datetime
+
+            if limit_to_start_date_query_field:
+                params[limit_to_start_date_query_field] = now_datetime
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
@@ -535,7 +541,9 @@ class Contacts(ActiveCampaign):
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
+    limit_to_start_date_query_field = 'filters[updated_before]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+    children= ['contact_custom_field_values', 'contact_automations', 'contact_tags', 'contact_lists', 'bounce_logs', 'activities']
 
 class ContactAutomations(ActiveCampaign):
     """
@@ -544,9 +552,10 @@ class ContactAutomations(ActiveCampaign):
     """
     stream_name = 'contact_automations'
     replication_keys = ['lastdate']
-    path = 'contactAutomations'
+    path = 'contacts/{}/contactAutomations'
     data_key = 'contactAutomations'
     created_timestamp = 'adddate'
+    parent = 'contacts'
 
 class ContactCustomFields(ActiveCampaign):
     """
@@ -585,9 +594,10 @@ class ContactCustomFieldValues(ActiveCampaign):
     """
     stream_name = 'contact_custom_field_values'
     replication_keys = ['udate']
-    path = 'fieldValues'
+    path = 'contacts/{}/fieldValues'
     data_key = 'fieldValues'
     created_timestamp = 'cdate'
+    parent = 'contacts'
 
 class ContactDeals(ActiveCampaign):
     """
@@ -849,9 +859,10 @@ class Activities(ActiveCampaign):
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
-    path = 'activities'
+    path = 'activities?contact={}'
     data_key = 'activities'
     bookmark_query_field = 'after'
+    parent = 'contacts'
 
 class AutomationBlocks(ActiveCampaign):
     """
@@ -869,9 +880,10 @@ class BounceLogs(ActiveCampaign):
     """
     stream_name = 'bounce_logs'
     replication_keys = ['updated_timestamp']
-    path = 'bounceLogs'
+    path = 'contacts/{}/bounceLogs'
     data_key = 'bounceLogs'
     created_timestamp = 'created_timestamp'
+    parent = 'contacts'
 
 class CampaignLists(ActiveCampaign):
     """
@@ -926,9 +938,10 @@ class ContactLists(ActiveCampaign):
     """
     stream_name = 'contact_lists'
     replication_keys = ['updated_timestamp']
-    path = 'contactLists'
+    path = 'contacts/{}/contactLists'
     data_key = 'contactLists'
     created_timestamp = 'created_timestamp'
+    parent = 'contacts'
 
 class ContactTags(ActiveCampaign):
     """
@@ -936,9 +949,10 @@ class ContactTags(ActiveCampaign):
     """
     stream_name = 'contact_tags'
     replication_keys = ['updated_timestamp']
-    path = 'contactTags'
+    path = 'contacts/{}/contactTags'
     data_key = 'contactTags'
     created_timestamp = 'created_timestamp'
+    parent = 'contacts'
 
 class ContactConversions(ActiveCampaign):
     """
@@ -1097,7 +1111,13 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_orders': 'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products',
+    'contacts-contact_automations': 'contact_automations',
+    'contacts-contact_custom_field_values': 'contact_custom_field_values',
+    'contacts-contact_tags': 'contact_tags',
+    'contacts-contact_lists': 'contact_lists',
+    'contacts-bounce_logs': 'bounce_logs',
+    'contacts-activities': 'activities'
 }
 
 def flatten_streams():
