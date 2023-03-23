@@ -389,7 +389,9 @@ class ActiveCampaign:
 
             # Parent record batch
             # Get pagination details
-            api_total = int(data.get('meta', {}).get('total', 0))
+            total_count = data.get('meta', {}).get('total') or 0
+            api_total = int(total_count)
+
             if api_total == 0:
                 total_records = record_count
             else:
