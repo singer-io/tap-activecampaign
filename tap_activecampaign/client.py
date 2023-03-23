@@ -16,6 +16,8 @@ class Server5xxError(Exception):
 class Server429Error(Exception):
     pass
 
+class Server403Error(Exception):
+    pass
 
 class ActiveCampaignError(Exception):
     pass
@@ -25,7 +27,7 @@ class ActiveCampaignBadRequestError(ActiveCampaignError):
 class ActiveCampaignUnauthorizedError(ActiveCampaignError):
     pass
 
-class ActiveCampaignForbiddenError(ActiveCampaignError):
+class ActiveCampaignForbiddenError(Server403Error):
     pass
 
 class ActiveCampaignNotFoundError(ActiveCampaignError):
@@ -79,7 +81,7 @@ def should_retry_error(exception):
         Return true if exception is required to retry otherwise return false
     """
 
-    if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error):
+    if isinstance(exception, OSError) or isinstance(exception, Server5xxError) or isinstance(exception, Server429Error) or isinstance(exception, Server403Error):
         # Retry Server5xxError and Server429Error exception. Retry exception if it is child class of OSError.
         # OSError is Parent class of ConnectionError, ConnectionResetError, TimeoutError and other errors mentioned in https://docs.python.org/3/library/exceptions.html#os-exceptions
         return True
@@ -193,7 +195,7 @@ class ActiveCampaignClient(object):
     @backoff.on_exception(backoff.expo,
                           (Exception),
                           giveup=lambda e: not should_retry_error(e),
-                          max_tries=5,
+                          max_tries=50,
                           factor=2)
     # Rate limit: https://developers.activecampaign.com/reference#rate-limits
     @utils.ratelimit(5, 1)
