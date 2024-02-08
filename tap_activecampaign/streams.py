@@ -80,21 +80,13 @@ class ActiveCampaign:
         Return bookmark value present in state or return a default value if no bookmark
         present in the state for provided stream
         """
-        if (state is None) or ('bookmarks' not in state):
-            return default
-        return (
-            state
-            .get('bookmarks', {})
-            .get(stream, default)
-        )
-
+        if state and 'bookmarks' in state:
+            return state.get('bookmarks', {}).get(stream, default)
+        return default
 
     def write_bookmark(self, state, stream, value):
-        """ Write bookmark in state. """
-        if 'bookmarks' not in state:
-            state['bookmarks'] = {}
-        state['bookmarks'][stream] = value
-        LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
+        state.setdefault('bookmarks', {})[stream] = value
+        LOGGER.info('Write state for stream: %s, value: %s', stream, value)
         singer.write_state(state)
 
     def transform_datetime(self, this_dttm):
@@ -102,8 +94,7 @@ class ActiveCampaign:
         Transform the datetime to standard datetime format "%Y-%m%dT%H:%M:%S.000000Z"
         """
         with Transformer() as transformer:
-            new_dttm = transformer._transform_datetime(this_dttm)
-        return new_dttm
+            return transformer._transform_datetime(this_dttm)
 
     def process_records(self,
                         catalog, #pylint: disable=too-many-branches
@@ -128,6 +119,7 @@ class ActiveCampaign:
         stream_metadata = metadata.to_map(stream.metadata)
 
         with metrics.record_counter(stream_name) as counter:
+            last_dttm = self.transform_datetime(last_datetime)
             for record in records:
                 # If child object, add parent_id to record
                 if parent_id and parent:
@@ -147,22 +139,20 @@ class ActiveCampaign:
 
                     # Reset max_bookmark_value to new value if higher
                     if transformed_record.get(bookmark_field):
-                        if max_bookmark_value is None or \
-                            transformed_record[bookmark_field] > self.transform_datetime(max_bookmark_value):
-                            max_bookmark_value = transformed_record[bookmark_field]
+                        bookmark_value = transformed_record[bookmark_field]
+                        if max_bookmark_value is None or bookmark_value > self.transform_datetime(max_bookmark_value):
+                            max_bookmark_value = bookmark_value
 
                     # If bookmark_field is not none that means stream is incremental.
                     # So, in that case, the tap writes only those records of which the replication key value is greater than last saved bookmark key value
                     # For, FULL_TABLE stream bookmark_field is none. So, in the `else` part it writes all records for the FULL_TABLE stream
                     if bookmark_field and (bookmark_field in transformed_record):
-                        last_dttm = self.transform_datetime(last_datetime)
                         bookmark_dttm = self.transform_datetime(transformed_record[bookmark_field])
                         # Keep only records whose bookmark is after the last_datetime
-                        if bookmark_dttm:
-                            if bookmark_dttm >= last_dttm:
-                                self.write_record(stream_name, transformed_record, \
-                                    time_extracted=time_extracted)
-                                counter.increment()
+                        if bookmark_dttm and bookmark_dttm >= last_dttm:
+                            self.write_record(stream_name, transformed_record, \
+                                time_extracted=time_extracted)
+                            counter.increment()
                     else:
                         self.write_record(stream_name, transformed_record, time_extracted=time_extracted)
                         counter.increment()
@@ -170,34 +160,16 @@ class ActiveCampaign:
             # return maximum bookmark value and total no of records
             return max_bookmark_value, counter.value
 
-
     # Sync a specific parent or child endpoint.
-    def sync(
-            self,
-            client,
-            catalog,
-            state,
-            start_date,
-            path,
-            selected_streams=None,
-            parent=None,
-            parent_id=None):
-
+    def sync(self, client, catalog, state, start_date, path, selected_streams=None, parent=None, parent_id=None):
         static_params = self.params
         bookmark_query_field = self.bookmark_query_field
         bookmark_field = next(iter(self.replication_keys or []), None)
-        # Get the latest bookmark for the stream and set the last_integer/datetime
-        last_datetime = None
-        max_bookmark_value = None
-
         last_datetime = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
-        LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
-            self.stream_name, bookmark_field, last_datetime))
-        now_datetime = utils.now()
-        last_dttm = strptime_to_utc(last_datetime)
+        LOGGER.info(f"stream: {self.stream_name}, bookmark_field: {bookmark_field}, last_datetime: {last_datetime}")
         endpoint_total = 0
-
+        
         # pagination: loop thru all pages of data
         # Pagination reference: https://developers.activecampaign.com/reference#pagination
         # Each page has an offset (starting value) and a limit (batch size, number of records)
@@ -221,19 +193,15 @@ class ActiveCampaign:
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
-            querystring = None
-            querystring = '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
+            querystring = '&'.join([f'{key}={value}' for key, value in params.items()])
 
-            LOGGER.info('URL for Stream {}: {}{}{}'.format(
-                self.stream_name,
-                self.client.base_url,
-                path,
-                '?{}'.format(querystring) if params else ''))
+            LOGGER.info(f"URL for Stream {self.stream_name}: {self.client.base_url}{path}{'?'+querystring if params else ''}")
 
             # API request data
             endpoint_total, total_records, record_count, page, offset, max_bookmark_value = self.get_and_transform_records(
-                                querystring, path, max_bookmark_value, state, catalog, start_date, last_datetime, endpoint_total, 
-                                  limit, total_records, record_count, page, offset, parent, parent_id, selected_streams)
+                querystring, path, max_bookmark_value, state, catalog, start_date, last_datetime, endpoint_total, 
+                limit, total_records, record_count, page, offset, parent, parent_id, selected_streams
+            )
 
         # Update the state with the max_bookmark_value for the endpoint
         # ActiveCampaign API does not allow page/batch sorting; bookmark written for endpoint
@@ -319,7 +287,7 @@ class ActiveCampaign:
         # End if children
 
     def get_and_transform_records(self, querystring, path, max_bookmark_value, state, catalog, start_date, last_datetime, endpoint_total, 
-                                  limit, total_records, record_count, page, offset, parent, parent_id, selected_streams):
+                                limit, total_records, record_count, page, offset, parent, parent_id, selected_streams):
         
         """
         Get the records using the client get request and transform it using transform_records
@@ -330,21 +298,20 @@ class ActiveCampaign:
         id_fields = self.key_properties
 
         # API request data
-        data = {}
         data = self.client.get(
             path=path,
             params=querystring,
             endpoint=self.stream_name)
-        
+
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
         
-        if not data or data is None or data == {}:
+        if not data:
             LOGGER.info('No data for URL {}{}{}'.format(self.client.base_url, path, querystring)) # No data results
         else: # has data
             transformed_data = self.transform_data(data)
             
-            if not transformed_data or transformed_data is None:
+            if not transformed_data:
                 LOGGER.info('No transformed data for data = {}'.format(data)) # No data results
 
             i = 0
@@ -363,7 +330,7 @@ class ActiveCampaign:
                         LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
                             self.stream_name, key, record))
                         raise RuntimeError
-                i = i + 1
+                i += 1
         
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
@@ -378,7 +345,7 @@ class ActiveCampaign:
                 parent_id=parent_id)
             LOGGER.info('Stream {}, batch processed {} records'.format(
                 self.stream_name, record_count))
-            endpoint_total = endpoint_total + record_count
+            endpoint_total += record_count
 
             # Loop thru parent batch records for each children objects (if should stream)
             children = self.children
@@ -409,8 +376,8 @@ class ActiveCampaign:
                 to_rec,
                 total_records))
             # Pagination: increment the offset by the limit (batch-size) and page
-            offset = offset + limit
-            page = page + 1
+            offset += limit
+            page += 1
             # End page/batch - while next URL loop
 
         return endpoint_total, total_records, record_count, page, offset, max_bookmark_value
