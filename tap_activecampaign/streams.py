@@ -38,7 +38,8 @@ class ActiveCampaign:
     bookmark_query_field = None
     links = []
     children = []
-    
+    offset_bookmark_limit = 1000
+
     def __init__(self, client: ActiveCampaignClient = None):
         self.client = client
 
@@ -76,25 +77,44 @@ class ActiveCampaign:
             raise err
 
     def get_bookmark(self, state, stream, default):
-        """ 
+        """
         Return bookmark value present in state or return a default value if no bookmark
         present in the state for provided stream
         """
         if (state is None) or ('bookmarks' not in state):
-            return default
-        return (
-            state
-            .get('bookmarks', {})
-            .get(stream, default)
-        )
+            return default, 0
+
+        if 'offset' in state.get('bookmarks', {}).get(stream, {}):
+            bookmark_field = next(iter(self.replication_keys or []), None)
+            bookmark_value = state.get('bookmarks', {}).get(stream, {}).get(
+                bookmark_field, default) if bookmark_field else default
+
+            # Round of the offsets in multiples of offset limit, this is needed to make sure bookmarking works
+            # as expected in case state file is accidentally updated with some random value
+            offset = int(state.get('bookmarks', {}).get(stream).get(
+                'offset') / self.offset_bookmark_limit) * self.offset_bookmark_limit
+        else:
+            bookmark_value = state.get('bookmarks', {}).get(stream, default)
+            offset = 0
+        return bookmark_value, offset
 
 
-    def write_bookmark(self, state, stream, value):
+    def write_bookmark(self, state, stream, value, offset=0):
         """ Write bookmark in state. """
         if 'bookmarks' not in state:
             state['bookmarks'] = {}
-        state['bookmarks'][stream] = value
-        LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
+        bookmark_field = next(iter(self.replication_keys or []), None)
+        if bookmark_field and offset:
+            state['bookmarks'][stream] = {bookmark_field: value,
+                                          'offset': offset}
+        elif offset:
+            state['bookmarks'][stream] = {'offset': offset}
+        elif bookmark_field:
+            state['bookmarks'][stream] = value
+        else:
+            if stream in state['bookmarks']:
+                del state['bookmarks']
+        LOGGER.info('Write state for stream: {}, value: {}, offset {}'.format(stream, value, offset))
         singer.write_state(state)
 
     def transform_datetime(self, this_dttm):
@@ -190,22 +210,19 @@ class ActiveCampaign:
         last_datetime = None
         max_bookmark_value = None
 
-        last_datetime = self.get_bookmark(state, self.stream_name, start_date)
+        last_datetime, offset = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
-        LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
-            self.stream_name, bookmark_field, last_datetime))
-        now_datetime = utils.now()
-        last_dttm = strptime_to_utc(last_datetime)
+        LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}, offset: {}'.format(
+            self.stream_name, bookmark_field, last_datetime, offset))
         endpoint_total = 0
 
         # pagination: loop thru all pages of data
         # Pagination reference: https://developers.activecampaign.com/reference#pagination
         # Each page has an offset (starting value) and a limit (batch size, number of records)
         # Increase the "offset" by the "limit" for each batch.
-        # Continue until the "record_count" returned < "limit" is null/zero or 
-        offset = 0 # Starting offset value for each batch API call
+        # Continue until the "record_count" returned < "limit" is null/zero
         limit = 100 # Batch size; Number of records per API call; Max = 100
-        total_records = 0 # Initialize total
+        total_records = offset # Initialize total
         record_count = limit # Initialize, reset for each API call
         page = 1
 
@@ -234,6 +251,10 @@ class ActiveCampaign:
             endpoint_total, total_records, record_count, page, offset, max_bookmark_value = self.get_and_transform_records(
                                 querystring, path, max_bookmark_value, state, catalog, start_date, last_datetime, endpoint_total, 
                                   limit, total_records, record_count, page, offset, parent, parent_id, selected_streams)
+
+            # Write offset after every 1000 records
+            if not offset % self.offset_bookmark_limit:
+                self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
 
         # Update the state with the max_bookmark_value for the endpoint
         # ActiveCampaign API does not allow page/batch sorting; bookmark written for endpoint
