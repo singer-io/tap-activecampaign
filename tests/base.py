@@ -548,12 +548,16 @@ class ActiveCampaignTest(unittest.TestCase):
             connections.select_catalog_and_fields_via_metadata(
                 conn_id, catalog, schema, [], non_selected_properties)
 
-    def calculated_states_by_stream(self, current_state):
+    def calculated_states_by_stream(self, current_state, currently_syncing_stream):
         timedelta_by_stream = {stream: [0,0,1]  # {stream_name: [days, hours, minutes], ...}
                                for stream in self.expected_check_streams()}
 
         stream_to_calculated_state = {stream: "" for stream in current_state['bookmarks'].keys()}
         for stream, state in current_state['bookmarks'].items():
+            # Skip the currently syncing stream
+            if stream == currently_syncing_stream or self.expected_replication_method()[stream] == 'FULL_TABLE':
+                continue
+
             state_as_datetime = dateutil.parser.parse(state)
 
             days, hours, minutes = timedelta_by_stream[stream]
