@@ -84,37 +84,24 @@ class ActiveCampaign:
         if (state is None) or ('bookmarks' not in state):
             return default, 0
 
-        if 'offset' in state.get('bookmarks', {}).get(stream, {}):
-            bookmark_field = next(iter(self.replication_keys or []), None)
-            bookmark_value = state.get('bookmarks', {}).get(stream, {}).get(
-                bookmark_field, default) if bookmark_field else default
-
-            # Round of the offsets in multiples of offset limit, this is needed to make sure bookmarking works
-            # as expected in case state file is accidentally updated with some random value
-            offset = int(state.get('bookmarks', {}).get(stream).get(
-                'offset') / self.offset_bookmark_limit) * self.offset_bookmark_limit
+        if next(iter(self.replication_keys or []), None):
+            return state.get('bookmarks', {}).get(stream, default), 0
         else:
-            bookmark_value = state.get('bookmarks', {}).get(stream, default)
-            offset = 0
-        return bookmark_value, offset
+            return default, state.get('bookmarks', {}).get(stream, 0)
 
 
-    def write_bookmark(self, state, stream, value, offset=0):
+    def write_bookmark(self, state, stream, value, offset=None):
         """ Write bookmark in state. """
         if 'bookmarks' not in state:
             state['bookmarks'] = {}
-        bookmark_field = next(iter(self.replication_keys or []), None)
-        if bookmark_field and offset:
-            state['bookmarks'][stream] = {bookmark_field: value,
-                                          'offset': offset}
-        elif offset:
-            state['bookmarks'][stream] = {'offset': offset}
-        elif bookmark_field:
+        if next(iter(self.replication_keys or []), None):
             state['bookmarks'][stream] = value
-        else:
-            if stream in state['bookmarks']:
-                del state['bookmarks']
-        LOGGER.info('Write state for stream: {}, value: {}, offset {}'.format(stream, value, offset))
+        elif offset:
+            state['bookmarks'][stream] = offset
+        elif stream in state['bookmarks']:
+            del state['bookmarks'][stream]
+
+        LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
         singer.write_state(state)
 
     def transform_datetime(self, this_dttm):
@@ -238,8 +225,8 @@ class ActiveCampaign:
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
-            querystring = None
-            querystring = '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
+            querystring = f'orders[{bookmark_field}]=ASC&' if bookmark_field else ""
+            querystring += '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
 
             LOGGER.info('URL for Stream {}: {}{}{}'.format(
                 self.stream_name,
@@ -257,9 +244,7 @@ class ActiveCampaign:
                 self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
 
         # Update the state with the max_bookmark_value for the endpoint
-        # ActiveCampaign API does not allow page/batch sorting; bookmark written for endpoint
-        if bookmark_field:
-            self.write_bookmark(state, self.stream_name, max_bookmark_value)
+        self.write_bookmark(state, self.stream_name, max_bookmark_value)
 
         # Return total_records (for all pages and date windows)
         return endpoint_total

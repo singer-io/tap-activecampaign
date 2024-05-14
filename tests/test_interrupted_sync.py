@@ -17,13 +17,13 @@ class InterruptedSyncTest(ActiveCampaignTest):
         streams_to_test = self.expected_check_streams() - {'campaign_lists', 'contact_conversions', 'sms'}
         currently_syncing_stream = 'activities'
         bookmark_field = list(self.expected_replication_keys()[currently_syncing_stream])[0]
-        interrupted_stream_bookmark = {bookmark_field: '2021-12-01T00:00:00Z', 'offset': 1000}
+        interrupted_stream_bookmark = '2021-12-01T00:00:00.000000Z'
         self.main(streams_to_test, currently_syncing_stream, interrupted_stream_bookmark)
 
     def test_run_full_table_streams(self):
         streams_to_test = {'accounts', 'activities', 'campaign_lists', 'tags'}
         currently_syncing_stream = 'campaign_lists'
-        interrupted_stream_bookmark = {'offset': 10000}
+        interrupted_stream_bookmark = 10000
         self.main(streams_to_test, currently_syncing_stream, interrupted_stream_bookmark)
 
     def main(self, streams_to_test, currently_syncing_stream, interrupted_stream_bookmark):
@@ -153,22 +153,23 @@ class InterruptedSyncTest(ActiveCampaignTest):
                 full_sync_record_count = len(first_sync_stream_records)
                 interrupted_record_count = len(post_interrupted_sync_stream_records)
 
+                # Final bookmark after interrupted sync
+                final_stream_bookmark = post_interrupted_sync_state["bookmarks"].get(
+                    stream, None)
                 if replication_method == self.INCREMENTAL:
-                    # Final bookmark after interrupted sync
-                    final_stream_bookmark = post_interrupted_sync_state["bookmarks"].get(
-                        stream, None)
-
                     # Verify final bookmark matched the formatting standards for the resuming sync
                     self.assertIsNotNone(final_stream_bookmark,
                                          msg="Bookmark can not be 'None'.")
                     self.assertIsInstance(final_stream_bookmark, str,
                                           msg="Bookmark format is not as expected.")
+                else:
+                    self.assertNotIn(stream, post_interrupted_sync_state)
 
                 if stream == interrupted_sync_state["currently_syncing"]:
-                    # Assign the start date to the interrupted stream
                     if self.expected_replication_method()[stream] == self.INCREMENTAL:
+                        # Assign the start date to the interrupted stream
                         interrupted_stream_datetime = self.parse_date(
-                            interrupted_sync_state["bookmarks"][stream][replication_key])
+                            interrupted_sync_state["bookmarks"][stream])
 
                         primary_key = self.expected_primary_keys()[stream].pop() if self.expected_primary_keys()[stream] else None
 
@@ -191,16 +192,16 @@ class InterruptedSyncTest(ActiveCampaignTest):
                                 self.assertIn(record[primary_key], full_records_primary_keys,
                                             msg="Incremental table record in interrupted sync not found in full sync")
 
-                            # Record count for all streams of interrupted sync match expectations
-                            records_after_interrupted_bookmark = 0
-                            for record in first_sync_stream_records:
-                                record_time = self.parse_date(record.get(replication_key))
-                                if record_time >= interrupted_stream_datetime:
-                                    records_after_interrupted_bookmark += 1
+                        # Record count for all streams of interrupted sync match expectations
+                        records_after_interrupted_bookmark = 0
+                        for record in first_sync_stream_records:
+                            record_time = self.parse_date(record.get(replication_key))
+                            if record_time >= interrupted_stream_datetime:
+                                records_after_interrupted_bookmark += 1
 
-                            self.assertGreater(records_after_interrupted_bookmark, interrupted_record_count,
-                                            msg="Expected {} records in each sync".format(
-                                                records_after_interrupted_bookmark))
+                        self.assertEqual(records_after_interrupted_bookmark, interrupted_record_count,
+                                        msg="Expected {} records in each sync".format(
+                                            records_after_interrupted_bookmark))
                     else:
                         self.assertGreater(first_sync_record_count[stream], interrupted_record_count)
 
