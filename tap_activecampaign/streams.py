@@ -86,8 +86,8 @@ class ActiveCampaign:
 
         if next(iter(self.replication_keys or []), None):
             return state.get('bookmarks', {}).get(stream, default), 0
-        else:
-            return default, state.get('bookmarks', {}).get(stream, 0)
+
+        return default, state.get('bookmarks', {}).get(stream, 0)
 
 
     def write_bookmark(self, state, stream, value, offset=None):
@@ -199,8 +199,8 @@ class ActiveCampaign:
 
         last_datetime, offset = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
-        LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}, offset: {}'.format(
-            self.stream_name, bookmark_field, last_datetime, offset))
+        LOGGER.info(
+            f'stream: {self.stream_name}, bookmark_field: {bookmark_field}, last_datetime: {last_datetime}, offset: {offset}')
         endpoint_total = 0
 
         # pagination: loop thru all pages of data
