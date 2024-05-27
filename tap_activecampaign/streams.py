@@ -85,7 +85,9 @@ class ActiveCampaign:
             return default, 0
 
         if next(iter(self.replication_keys or []), None):
-            return state.get('bookmarks', {}).get(stream, default), 0
+            replication_key_value = state.get('bookmarks', {}).get(stream, default).get(self.replication_keys[0])
+            offset = state.get('bookmarks', {}).get(stream, default).get("offset", 0)
+            return replication_key_value, offset
 
         return default, state.get('bookmarks', {}).get(stream, 0)
 
@@ -98,8 +100,6 @@ class ActiveCampaign:
             state['bookmarks'][stream] = value
         elif offset:
             state['bookmarks'][stream] = offset
-        elif stream in state['bookmarks']:
-            del state['bookmarks'][stream]
 
         LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
         singer.write_state(state)
