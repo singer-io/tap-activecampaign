@@ -244,7 +244,7 @@ class ActiveCampaign:
                 self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
 
         # Update the state with the max_bookmark_value for the endpoint
-        self.write_bookmark(state, self.stream_name, max_bookmark_value)
+        self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
 
         # Return total_records (for all pages and date windows)
         return endpoint_total
