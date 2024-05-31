@@ -84,22 +84,32 @@ class ActiveCampaign:
         if (state is None) or ('bookmarks' not in state):
             return default, 0
 
+        offset = state.get('bookmarks', {}).get(stream, {"offset": 0}).get("offset", 0)
         if next(iter(self.replication_keys or []), None):
-            replication_key_value = state.get('bookmarks', {}).get(stream, default).get(self.replication_keys[0])
-            offset = state.get('bookmarks', {}).get(stream, default).get("offset", 0)
-            return replication_key_value, offset
+            replication_key_value = state.get('bookmarks', {}).get(
+                stream, {self.replication_keys[0]: default}).get(self.replication_keys[0])
+        else:
+            replication_key_value = default
 
-        return default, state.get('bookmarks', {}).get(stream, 0)
+        return replication_key_value, offset
 
 
     def write_bookmark(self, state, stream, value, offset=None):
         """ Write bookmark in state. """
         if 'bookmarks' not in state:
             state['bookmarks'] = {}
+
+        if stream not in state['bookmarks']:
+            state['bookmarks'][stream] = {}
+
         if next(iter(self.replication_keys or []), None):
-            state['bookmarks'][stream] = value
-        elif offset:
-            state['bookmarks'][stream] = offset
+            if self.replication_keys[0] in state['bookmarks'][stream]:
+                state['bookmarks'][stream] = {self.replication_keys[0]: value}
+            else:
+                state['bookmarks'][stream][self.replication_keys[0]] = value
+
+        if offset:
+            state['bookmarks'][stream]["offset"] = offset
 
         LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
         singer.write_state(state)
@@ -244,7 +254,9 @@ class ActiveCampaign:
                 self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
 
         # Update the state with the max_bookmark_value for the endpoint
-        self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
+        # Substract one batch offset to have record overlap
+        final_offset = offset-limit if offset else offset
+        self.write_bookmark(state, self.stream_name, max_bookmark_value, final_offset)
 
         # Return total_records (for all pages and date windows)
         return endpoint_total
@@ -353,24 +365,24 @@ class ActiveCampaign:
             
             if not transformed_data or transformed_data is None:
                 LOGGER.info('No transformed data for data = {}'.format(data)) # No data results
-
-            i = 0
-            for record in transformed_data:
-                # Some endpoints update date is null upon creation
-                if bookmark_field:
-                    created_value = None
-                    if created_timestamp_field:
-                        created_value = record.get(created_timestamp_field)
-                    bookmark_value = record.get(bookmark_field)
-                    if not bookmark_value:
-                        transformed_data[i][bookmark_field] = created_value
-                # Verify key id_fields are present
-                for key in id_fields:
-                    if not record.get(key):
-                        LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
-                            self.stream_name, key, record))
-                        raise RuntimeError
-                i = i + 1
+            else:
+                i = 0
+                for record in transformed_data:
+                    # Some endpoints update date is null upon creation
+                    if bookmark_field:
+                        created_value = None
+                        if created_timestamp_field:
+                            created_value = record.get(created_timestamp_field)
+                        bookmark_value = record.get(bookmark_field)
+                        if not bookmark_value:
+                            transformed_data[i][bookmark_field] = created_value
+                    # Verify key id_fields are present
+                    for key in id_fields:
+                        if not record.get(key):
+                            LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
+                                self.stream_name, key, record))
+                            raise RuntimeError
+                    i = i + 1
         
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
