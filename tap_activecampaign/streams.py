@@ -1,6 +1,6 @@
 import singer
 from singer import metrics, metadata, Transformer, utils
-from singer.utils import strptime_to_utc
+from singer.utils import strftime, strptime_to_utc
 from tap_activecampaign.transform import transform_json
 from tap_activecampaign.client import ActiveCampaignClient
 
@@ -110,8 +110,11 @@ class ActiveCampaign:
 
         if offset:
             state['bookmarks'][stream]["offset"] = offset
+        elif "offset" in state['bookmarks'][stream]:
+            del state['bookmarks'][stream]["offset"]
 
-        LOGGER.info('Write state for stream: {}, value: {}'.format(stream, value))
+        LOGGER.info('Write state for stream: {}, {}: {}, offset: {}'.format(
+            stream, self.replication_keys[0], value, offset or 0))
         singer.write_state(state)
 
     def transform_datetime(self, this_dttm):
@@ -207,6 +210,7 @@ class ActiveCampaign:
         last_datetime = None
         max_bookmark_value = None
 
+        sync_start_dttm = utils.now()
         last_datetime, offset = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
         LOGGER.info(
@@ -235,8 +239,8 @@ class ActiveCampaign:
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
-            querystring = f'orders[{bookmark_field}]=ASC&' if bookmark_field else ""
-            querystring += '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
+            querystring = None
+            querystring = '&'.join(['%s=%s' % (key, value) for (key, value) in params.items()])
 
             LOGGER.info('URL for Stream {}: {}{}{}'.format(
                 self.stream_name,
@@ -251,12 +255,23 @@ class ActiveCampaign:
 
             # Write offset after every 1000 records
             if not offset % self.offset_bookmark_limit:
-                self.write_bookmark(state, self.stream_name, max_bookmark_value, offset)
+                self.write_bookmark(state, self.stream_name, last_datetime, offset)
 
         # Update the state with the max_bookmark_value for the endpoint
         # Substract one batch offset to have record overlap
         final_offset = offset-limit if offset else offset
-        self.write_bookmark(state, self.stream_name, max_bookmark_value, final_offset)
+
+        # Records, whether synced or not, may be updated during sync.
+        # If synced records are updated before those yet to be synced, setting the bookmark
+        # to the past replication value of the synced record may cause us to miss these
+        # updates in the next sync. To avoid this, setting the bookmark as the sync start time
+        # ensures we capture all updated records without missing any during subsequent syncs.
+        if strptime_to_utc(max_bookmark_value) < sync_start_dttm:
+            bookmark_value = max_bookmark_value
+        else:
+            bookmark_value = strftime(sync_start_dttm)
+
+        self.write_bookmark(state, self.stream_name, bookmark_value, 0)
 
         # Return total_records (for all pages and date windows)
         return endpoint_total
@@ -365,24 +380,24 @@ class ActiveCampaign:
             
             if not transformed_data or transformed_data is None:
                 LOGGER.info('No transformed data for data = {}'.format(data)) # No data results
-            else:
-                i = 0
-                for record in transformed_data:
-                    # Some endpoints update date is null upon creation
-                    if bookmark_field:
-                        created_value = None
-                        if created_timestamp_field:
-                            created_value = record.get(created_timestamp_field)
-                        bookmark_value = record.get(bookmark_field)
-                        if not bookmark_value:
-                            transformed_data[i][bookmark_field] = created_value
-                    # Verify key id_fields are present
-                    for key in id_fields:
-                        if not record.get(key):
-                            LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
-                                self.stream_name, key, record))
-                            raise RuntimeError
-                    i = i + 1
+
+            i = 0
+            for record in transformed_data:
+                # Some endpoints update date is null upon creation
+                if bookmark_field:
+                    created_value = None
+                    if created_timestamp_field:
+                        created_value = record.get(created_timestamp_field)
+                    bookmark_value = record.get(bookmark_field)
+                    if not bookmark_value:
+                        transformed_data[i][bookmark_field] = created_value
+                # Verify key id_fields are present
+                for key in id_fields:
+                    if not record.get(key):
+                        LOGGER.error('Stream: {}, Missing key {} in record: {}'.format(
+                            self.stream_name, key, record))
+                        raise RuntimeError
+                i = i + 1
         
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
