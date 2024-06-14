@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.0.2
+  * Improve bookmark strategy for incremental and full table [#40](https://github.com/singer-io/tap-activecampaign/pull/40)
+
 ## 1.0.1
   * Remove integer type for forms style.button.padding [#39](https://github.com/singer-io/tap-activecampaign/pull/39)
 
