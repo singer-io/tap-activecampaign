@@ -113,8 +113,8 @@ class ActiveCampaign:
         elif "offset" in state['bookmarks'][stream]:
             del state['bookmarks'][stream]["offset"]
 
-        LOGGER.info('Write state for stream: {}, {}: {}, offset: {}'.format(
-            stream, self.replication_keys[0], value, offset or 0))
+        LOGGER.info('Write state for stream: {}, replication key: {}, offset: {}'.format(
+            stream, value, offset or 0))
         singer.write_state(state)
 
     def transform_datetime(self, this_dttm):
