@@ -60,7 +60,7 @@
       "type": ["null", "integer"]
     },
     "code": {
-      "type": ["null", "string"]
+      "type": ["null", "integer", "string"]
     }
   }
 }
