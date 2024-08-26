@@ -528,16 +528,17 @@ class CampaignLinks(ActiveCampaign):
 
 class Contacts(ActiveCampaign):
     """
-    Get data for contacts. 
+    Get data for contacts.
     Reference : https://developers.activecampaign.com/reference#list-all-contacts
     """
     stream_name = 'contacts'
-    replication_keys = ['updated_timestamp']
+    replication_keys = ['udate']
     path = 'contacts'
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+
 
 class ContactAutomations(ActiveCampaign):
     """
