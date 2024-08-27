@@ -287,6 +287,8 @@ class ActiveCampaign:
                 # For each parent record
                 for record in transformed_data:
                     i = 0
+                    parent_id_field = None
+
                     # Set parent_id
                     for id_field in id_fields:
                         if i == 0:
