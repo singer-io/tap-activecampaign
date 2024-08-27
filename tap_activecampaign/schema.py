@@ -37,8 +37,11 @@ def get_schemas():
         mdata = metadata.to_map(mdata)
         # Loop through all keys and make replication keys of automatic inclusion
         for field_name in schema['properties'].keys():
-            
+
             if stream_metadata.get('replication_keys') and field_name in stream_metadata.get('replication_keys'):
+                mdata = metadata.write(mdata, ('properties', field_name), 'inclusion', 'automatic')
+
+            if stream_metadata.get('additional_automatic_keys') and field_name in stream_metadata.get('additional_automatic_keys'):
                 mdata = metadata.write(mdata, ('properties', field_name), 'inclusion', 'automatic')
 
         mdata = metadata.to_list(mdata)

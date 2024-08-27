@@ -25,11 +25,12 @@ class ActiveCampaign:
     A base class representing singer streams.
     :param client: The API client used to extract records from external source
     """
-    
+
     stream_name = None
     replication_method = 'INCREMENTAL'
     replication_keys = None
     key_properties = ['id']
+    additional_automatic_keys = None
     path = None
     params = {}
     parent = None
@@ -38,7 +39,7 @@ class ActiveCampaign:
     bookmark_query_field = None
     links = []
     children = []
-    
+
     def __init__(self, client: ActiveCampaignClient = None):
         self.client = client
 
@@ -533,6 +534,7 @@ class Contacts(ActiveCampaign):
     """
     stream_name = 'contacts'
     replication_keys = ['udate']
+    additional_automatic_keys = ['updated_timestamp']
     path = 'contacts'
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
@@ -1111,7 +1113,8 @@ def flatten_streams():
       flat_streams[stream.stream_name] = {
             'key_properties': stream.key_properties,
             'replication_method': stream.replication_method,
-            'replication_keys': stream.replication_keys
+            'replication_keys': stream.replication_keys,
+            'additional_automatic_keys': stream.additional_automatic_keys
         }
 
     return flat_streams
