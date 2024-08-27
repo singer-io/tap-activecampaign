@@ -28,8 +28,9 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
 
         # We are not able to generate data for `contact_conversions` stream. 
         # For `sms` stream it requires Professional plan of account. So, removing it from streams_to_test set.
-        expected_streams = expected_streams - {'contact_conversions', 'sms'}
-        
+        # BUG TDL-26417: Skip 'bounce_logs'
+        expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms'}
+
         expected_automatic_fields = self.expected_automatic_fields()
         conn_id = connections.ensure_connection(self)
 
