@@ -30,7 +30,7 @@ class ActiveCampaign:
     replication_method = 'INCREMENTAL'
     replication_keys = None
     key_properties = ['id']
-    additional_automatic_keys = None
+    additional_automatic_keys = []
     path = None
     params = {}
     parent = None
