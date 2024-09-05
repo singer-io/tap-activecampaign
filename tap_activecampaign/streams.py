@@ -284,6 +284,7 @@ class ActiveCampaign:
                 LOGGER.info('START Syncing: {}'.format(child_stream_name))
                 child_stream_obj = STREAMS[child_stream_name](self.client)
                 child_stream_obj.write_schema(catalog, child_stream_name)
+                parent_id_field = None
                 # For each parent record
                 for record in transformed_data:
                     i = 0

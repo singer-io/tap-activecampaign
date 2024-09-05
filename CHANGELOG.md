@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.1
+  * Update `bounce_logs` schema [#42](https://github.com/singer-io/tap-activecampaign/pull/42)
+
 ## 1.1.0
   * Update replication key for `contacts` stream [#41](https://github.com/singer-io/tap-activecampaign/pull/41)
 
