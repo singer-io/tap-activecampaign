@@ -25,11 +25,12 @@ class ActiveCampaign:
     A base class representing singer streams.
     :param client: The API client used to extract records from external source
     """
-    
+
     stream_name = None
     replication_method = 'INCREMENTAL'
     replication_keys = None
     key_properties = ['id']
+    additional_automatic_keys = []
     path = None
     params = {}
     parent = None
@@ -38,7 +39,7 @@ class ActiveCampaign:
     bookmark_query_field = None
     links = []
     children = []
-    
+
     def __init__(self, client: ActiveCampaignClient = None):
         self.client = client
 
@@ -287,6 +288,8 @@ class ActiveCampaign:
                 # For each parent record
                 for record in transformed_data:
                     i = 0
+                    parent_id_field = None
+
                     # Set parent_id
                     for id_field in id_fields:
                         if i == 0:
@@ -529,16 +532,18 @@ class CampaignLinks(ActiveCampaign):
 
 class Contacts(ActiveCampaign):
     """
-    Get data for contacts. 
+    Get data for contacts.
     Reference : https://developers.activecampaign.com/reference#list-all-contacts
     """
     stream_name = 'contacts'
-    replication_keys = ['updated_timestamp']
+    replication_keys = ['udate']
+    additional_automatic_keys = ['updated_timestamp']
     path = 'contacts'
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+
 
 class ContactAutomations(ActiveCampaign):
     """
@@ -1111,7 +1116,8 @@ def flatten_streams():
       flat_streams[stream.stream_name] = {
             'key_properties': stream.key_properties,
             'replication_method': stream.replication_method,
-            'replication_keys': stream.replication_keys
+            'replication_keys': stream.replication_keys,
+            'additional_automatic_keys': stream.additional_automatic_keys
         }
 
     return flat_streams
