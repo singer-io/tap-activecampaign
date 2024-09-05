@@ -26,7 +26,8 @@ class ActiveCampaignPagination(ActiveCampaignTest):
         # `brandings`, `configs`, `conversions`, `conversion_triggers`, `goals`, `contact_conversions`, `sms`, `user`.
         # The current plan allows only 25 users. So, skipped `user` stream. sms feature is not supported for the current plan.
         # So, removing it all from expected_streams set.
-        expected_streams = expected_streams - {'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals'}
+        # BUG TDL-26417: Skip 'bounce_logs'
+        expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals'}
 
         conn_id = connections.ensure_connection(self)
 
