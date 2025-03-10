@@ -151,7 +151,7 @@ class ActiveCampaignClient(object):
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
 
-        if not api_url.starts_with("https"):
+        if not api_url.startswith("https"):
             raise Exception('Error: api_url MUST use HTTPS')
 
         # if request_timeout is other than 0, "0" or "" then use request_timeout
