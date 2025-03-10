@@ -50,7 +50,7 @@ class TestActivitiesStreamParams(unittest.TestCase):
         mocked_process_records.return_value = "2022-04-01", 0
 
         # create client
-        client = ActiveCampaignClient("test_client_id", "test_client_secret", "test_refresh_token")
+        client = ActiveCampaignClient("https://dummy_url", "test_api_token")
         # create 'Activities' stream object
         activities = Activities(client=client)
         # function call

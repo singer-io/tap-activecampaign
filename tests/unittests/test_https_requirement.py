@@ -6,7 +6,7 @@ class TestRequestHTTPSRequirement(unittest.TestCase):
     '''
     Test that the client raises an Exception when the api_url is not https
     '''
-    def test_config_provided_request_timeout(self):
+    def test_https_requirement(self):
         """
             Unit tests to ensure that request timeout is set based on config value
         """

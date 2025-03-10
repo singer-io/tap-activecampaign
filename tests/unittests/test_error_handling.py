@@ -73,13 +73,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 400 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-        
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         expected_error_message = "HTTP-error-code: 400, Error: A validation exception has occurred."
 
         with self.assertRaises(client.ActiveCampaignBadRequestError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -89,13 +89,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 401 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-        
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         expected_error_message = "HTTP-error-code: 401, Error: Invalid authorization credentials."
-    
+
         with self.assertRaises(client.ActiveCampaignUnauthorizedError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -106,13 +106,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 403 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 403, Error: The request could not be authenticated or the authenticated user is not authorized to access the requested resource."
-    
+
         with self.assertRaises(client.ActiveCampaignForbiddenError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -123,13 +123,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 404 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 404, Error: The requested resource does not exist."
-    
+
         with self.assertRaises(client.ActiveCampaignNotFoundError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -140,13 +140,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 422 error with proper message comes from API response.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 422, Error: The connection service was not provided. The connection externalid was not provided."
-    
+
         with self.assertRaises(client.ActiveCampaignUnprocessableEntityError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -158,13 +158,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 429 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 429, Error: The user has sent too many requests in a given amount of time ('rate limiting') - contact support or account manager for more details."
-    
+
         with self.assertRaises(client.ActiveCampaignRateLimitError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -176,13 +176,13 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method raise 500 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 500, Error: The server encountered an unexpected condition which prevented" \
-            " it from fulfilling the request."    
+            " it from fulfilling the request."
         with self.assertRaises(client.ActiveCampaignInternalServerError) as e:
             _client.request("base_url")
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -194,7 +194,7 @@ class TestActiveCampaignErrorhandlingForRequestMethod(unittest.TestCase):
         """
         Test that `request` method gives empty json `{}` response when content is empty for a 200 response.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         response = _client.request("base_url")
 
@@ -209,13 +209,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 400 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 400, Error: A validation exception has occurred."
-    
+
         with self.assertRaises(client.ActiveCampaignBadRequestError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -225,13 +225,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 401 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 401, Error: Invalid authorization credentials."
-    
+
         with self.assertRaises(client.ActiveCampaignUnauthorizedError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -240,13 +240,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 403 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 403, Error: The request could not be authenticated or the authenticated user is not authorized to access the requested resource."
-    
+
         with self.assertRaises(client.ActiveCampaignForbiddenError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -256,13 +256,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 404 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 404, Error: The requested resource does not exist."
-    
+
         with self.assertRaises(client.ActiveCampaignNotFoundError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -272,13 +272,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 422 error with proper message comes from API response.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 422, Error: The connection service was not provided. The connection externalid was not provided."
-    
+
         with self.assertRaises(client.ActiveCampaignUnprocessableEntityError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -288,13 +288,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 429 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 429, Error: The user has sent too many requests in a given amount of time ('rate limiting') - contact support or account manager for more details."
-    
+
         with self.assertRaises(client.ActiveCampaignRateLimitError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -305,13 +305,13 @@ class TestActiveCampaignErrorhandlingForCheckApiTokenMethod(unittest.TestCase):
         """
         Test that `__enter__` method raise 500 error with proper message
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         expected_error_message = "HTTP-error-code: 500, Error: The server encountered an unexpected condition which prevented" \
-            " it from fulfilling the request."    
+            " it from fulfilling the request."
         with self.assertRaises(client.ActiveCampaignInternalServerError) as e:
             _client.__enter__()
-            
+
         # Verifying the message formed for the custom exception
         self.assertEqual(str(e.exception), expected_error_message)
 
@@ -326,11 +326,11 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry 429 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignRateLimitError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
@@ -340,11 +340,11 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry 500 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignInternalServerError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
@@ -353,11 +353,11 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry 501 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         with self.assertRaises(client.Server5xxError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
@@ -366,11 +366,11 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry 502 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.Server5xxError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
@@ -379,24 +379,24 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method does not retry 401 error.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignUnauthorizedError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called just 1 time
         self.assertEqual(mocked_request.call_count, 1)
-            
+
     @patch("requests.Session.get", side_effect=requests.exceptions.ConnectionError)
     def test_enter_method_handle_connection_error(self, mocked_request, mock_sleep):
         """
         Test that `__enter__` method retry Connection error 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(requests.exceptions.ConnectionError) as e:
             _client.__enter__()
-            
+
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
@@ -405,8 +405,8 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry Connection error(104) with Exception 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-        
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(Exception) as e:
             _client.__enter__()
 
@@ -418,7 +418,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `__enter__` method retry ConnectionResetError(104) with Exception 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         with self.assertRaises(ConnectionResetError) as e:
             _client.__enter__()
@@ -426,98 +426,98 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         # Verify that requests.Session.get called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")    
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_429)
     def test_request_method_handle_429_exception(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry 429 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignRateLimitError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_500)
     def test_request_method_handle_500_exception(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry 500 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignInternalServerError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_501)
     def test_request_method_handle_501_exception(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry 501 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.Server5xxError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_502)
     def test_request_method_handle_502_exception(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry 502 error 5 times
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.Server5xxError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=mock_send_401)
     def test_request_method_does_not_retry_401_error(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method does not retry 401 error.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(client.ActiveCampaignUnauthorizedError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called just 1 time
         self.assertEqual(mocked_request.call_count, 1)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")     
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=requests.exceptions.ConnectionError)
     def test_request_method_handle_connection_error(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry Connection error 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(requests.exceptions.ConnectionError) as e:
             _client.request("base_url")
-            
+
         # Verify that requests.Session.request called 5 times
         self.assertEqual(mocked_request.call_count, 5)
 
-    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token") 
+    @patch("tap_activecampaign.client.ActiveCampaignClient.check_api_token")
     @patch("requests.Session.request", side_effect=Exception(("Connection broken: ConnectionResetError(104, 'Connection reset by peer')", ConnectionResetError(104, 'Connection reset by peer'))))
     def test_request_method_handle_connection_reset_exception(self, mocked_request, mock_api_token, mock_sleep):
         """
         Test that `request` method retry Connection error(104) with Exception 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
-    
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
+
         with self.assertRaises(Exception) as e:
             _client.request("base_url")
 
@@ -530,7 +530,7 @@ class TestActiveCampaignErrorhandlingBackoff(unittest.TestCase):
         """
         Test that `request` method retry ConnectionResetError(104) with Exception 5 times.
         """
-        _client = client.ActiveCampaignClient('dummy_url', 'dummy_token')
+        _client = client.ActiveCampaignClient('https://dummy_url', 'dummy_token')
 
         with self.assertRaises(ConnectionResetError) as e:
             _client.request("base_url")
