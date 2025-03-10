@@ -27,7 +27,7 @@ class TestBackoffError(unittest.TestCase):
         mocked_request.side_effect = Timeout
 
         config = {
-            "api_url": "http://dummy_url.com",
+            "api_url": "https://dummy_url.com",
             "api_token": "dummy_cs",
             "user_agent": "test_ua"
         }
@@ -50,7 +50,7 @@ class TestBackoffError(unittest.TestCase):
         mocked_request.side_effect = ConnectionError
 
         config = {
-            "api_url": "http://dummy_url.com",
+            "api_url": "https://dummy_url.com",
             "api_token": "dummy_cs",
             "user_agent": "test_ua"
         }
@@ -91,59 +91,59 @@ class TestRequestTimeoutValue(unittest.TestCase):
     @mock.patch('tap_activecampaign.client.requests.Session.request', return_value = MockResponse("", status_code=200))
     @mock.patch('tap_activecampaign.client.ActiveCampaignClient.check_api_token')
     def test_config_provided_request_timeout(self, mock_get, mock_request):
-        """ 
+        """
             Unit tests to ensure that request timeout is set based on config value
         """
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100}
+        config = {"api_url": "https://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100}
         client = ActiveCampaignClient(**config)
         client.request("GET", "dummy_path")
-        
-        mock_request.assert_called_with('GET', 'http://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
+
+        mock_request.assert_called_with('GET', 'https://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
 
     @mock.patch('tap_activecampaign.client.requests.Session.request', return_value = MockResponse("", status_code=200))
     @mock.patch('tap_activecampaign.client.ActiveCampaignClient.check_api_token')
     def test_default_value_request_timeout(self, mock_get, mock_request):
-        """ 
+        """
             Unit tests to ensure that request timeout is set based default value
         """
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua"}
+        config = {"api_url": "https://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua"}
         client = ActiveCampaignClient(**config)
         client.request("GET", "dummy_path")
-        
-        mock_request.assert_called_with('GET', 'http://dummy_url.com/api/3/dummy_path', stream=True, timeout=300, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
+
+        mock_request.assert_called_with('GET', 'https://dummy_url.com/api/3/dummy_path', stream=True, timeout=300, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
 
     @mock.patch('tap_activecampaign.client.requests.Session.request', return_value = MockResponse("", status_code=200))
     @mock.patch('tap_activecampaign.client.ActiveCampaignClient.check_api_token')
     def test_config_provided_empty_request_timeout(self, mock_get, mock_request):
-        """ 
+        """
             Unit tests to ensure that request timeout is set based on default value if empty value is given in config
         """
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": ""}
+        config = {"api_url": "https://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": ""}
         client = ActiveCampaignClient(**config)
         client.request("GET", "dummy_path")
-        
-        mock_request.assert_called_with('GET', 'http://dummy_url.com/api/3/dummy_path', stream=True, timeout=300.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
+
+        mock_request.assert_called_with('GET', 'https://dummy_url.com/api/3/dummy_path', stream=True, timeout=300.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
 
     @mock.patch('tap_activecampaign.client.requests.Session.request', return_value = MockResponse("", status_code=200))
     @mock.patch('tap_activecampaign.client.ActiveCampaignClient.check_api_token')
     def test_config_provided_string_request_timeout(self, mock_get, mock_request):
-        """ 
+        """
             Unit tests to ensure that request timeout is set based on config string value
         """
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": "100"}
+        config = {"api_url": "https://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": "100"}
         client = ActiveCampaignClient(**config)
         client.request("GET", "dummy_path")
-        
-        mock_request.assert_called_with('GET', 'http://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
+
+        mock_request.assert_called_with('GET', 'https://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.0, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
 
     @mock.patch('tap_activecampaign.client.requests.Session.request', return_value = MockResponse("", status_code=200))
     @mock.patch('tap_activecampaign.client.ActiveCampaignClient.check_api_token')
     def test_config_provided_float_request_timeout(self, mock_get, mock_request):
-        """ 
+        """
             Unit tests to ensure that request timeout is set based on config float value
         """
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100.5}
+        config = {"api_url": "https://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100.5}
         client = ActiveCampaignClient(**config)
         client.request("GET", "dummy_path")
-        
-        mock_request.assert_called_with('GET', 'http://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.5, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
+
+        mock_request.assert_called_with('GET', 'https://dummy_url.com/api/3/dummy_path', stream=True, timeout=100.5, headers={'Api-Token': 'dummy_at', 'Accept': 'application/json', 'User-Agent': 'test_ua'})
