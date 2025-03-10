@@ -14,7 +14,7 @@ class TestBackoffError(unittest.TestCase):
         Check whether the request backoffs properly for request() for 5 times in case of Timeout error.
         """
         mock_request.side_effect = Timeout
-        client = ActiveCampaignClient("dummy_client_id", "dummy_client_secret", "dummy_refresh_token", 300)
+        client = ActiveCampaignClient("https://dummy_url", "dummy_api_token")
         with self.assertRaises(Timeout):
             client.request("GET")
         self.assertEquals(mock_request.call_count, 5)
