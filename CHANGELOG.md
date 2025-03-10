@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.3
+  * Require HTTPS [#44](https://github.com/singer-io/tap-activecampaign/pull/44)
+
 ## 1.1.2
   * Upgrade requests lib version to 2.32.3 [#43](https://github.com/singer-io/tap-activecampaign/pull/43)
 
