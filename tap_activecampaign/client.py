@@ -1,4 +1,6 @@
 import backoff
+import ipaddress
+from urllib.parse import urlparse
 import requests
 from singer import metrics, utils
 import singer
@@ -137,6 +139,23 @@ def raise_for_error(response):
 
     raise exc(message) from None
 
+def is_api_url_valid(api_url):
+    parsed_url = urlparse(api_url)
+
+    if parsed_url.scheme != "https":
+        return False
+
+    try:
+        # Ensure the hostname is not an IP address
+        ipaddress.ip_address(parsed_url.hostname)
+        return False
+    except ValueError:
+        # If the hostname is not an IP address, we assume it's a valid public domain
+        pass
+
+    return True
+
+
 
 class ActiveCampaignClient(object):
     def __init__(self,
@@ -151,8 +170,8 @@ class ActiveCampaignClient(object):
         self.__verified = False
         self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
 
-        if not api_url.startswith("https"):
-            raise Exception('Error: api_url MUST use HTTPS')
+        if not is_api_url_valid(api_url):
+            raise Exception('Error: api_url is not valid')
 
         # if request_timeout is other than 0, "0" or "" then use request_timeout
         if request_timeout and float(request_timeout):
