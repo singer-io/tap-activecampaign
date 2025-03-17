@@ -158,7 +158,7 @@ def is_api_url_valid(api_url):
             resolved_ip = ipaddress.ip_address(socket.gethostbyname(parsed_url.hostname))
             if resolved_ip.is_private:
                 return False
-        except Exception:
+        except ValueError:
             return False
 
     return True
