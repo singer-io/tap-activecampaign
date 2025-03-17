@@ -7,6 +7,6 @@ class TestRequestHTTPSRequirement(unittest.TestCase):
         '''
         Test that the client raises an Exception when the api_url is not https
         '''
-        config = {"api_url": "http://dummy_url.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100}
+        config = {"api_url": "http://activecampaign.com", "api_token": "dummy_at", "user_agent": "test_ua", "request_timeout": 100}
         with self.assertRaises(Exception):
             ActiveCampaignClient(**config)
