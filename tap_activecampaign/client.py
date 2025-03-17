@@ -1,6 +1,7 @@
 import backoff
 import ipaddress
 from urllib.parse import urlparse
+import socket
 import requests
 from singer import metrics, utils
 import singer
@@ -147,11 +148,18 @@ def is_api_url_valid(api_url):
 
     try:
         # Ensure the hostname is not an IP address
-        ipaddress.ip_address(parsed_url.hostname)
-        return False
+        ip = ipaddress.ip_address(parsed_url.hostname)
+        # Reject if the IP address is private
+        if ip.is_private:
+            return False
     except ValueError:
-        # If the hostname is not an IP address, we assume it's a valid public domain
-        pass
+        # If the hostname is not an IP address, resolve it to check if it points to a private IP
+        try:
+            resolved_ip = ipaddress.ip_address(socket.gethostbyname(parsed_url.hostname))
+            if resolved_ip.is_private:
+                return False
+        except Exception:
+            return False
 
     return True
 
