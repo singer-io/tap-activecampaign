@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.4
+  * Bump requests to 2.32.4, singer-python to 5.13.2, backoff to 1.10.0 [#46](https://github.com/singer-io/tap-activecampaign/pull/46)
+
 ## 1.1.3
   * Require HTTPS [#44](https://github.com/singer-io/tap-activecampaign/pull/44)
 
