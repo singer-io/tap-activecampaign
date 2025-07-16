@@ -10,9 +10,9 @@ setup(name='tap-activecampaign',
       py_modules=['tap_activecampaign'],
       install_requires=[
           'backoff==1.8.0',
-          'requests==2.32.3',
+          'requests==2.32.4',
           'pyhumps==1.3.1',
-          'singer-python==5.12.2'
+          'singer-python==5.13.2'
       ],
       entry_points='''
           [console_scripts]
