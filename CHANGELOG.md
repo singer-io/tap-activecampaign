@@ -1,7 +1,7 @@
 # Changelog
 
 ## 1.1.4
-  * Bump requests to v2.32.4 [#45](https://github.com/singer-io/tap-activecampaign/pull/45)
+  * Bump requests to v2.32.4 [#46](https://github.com/singer-io/tap-activecampaign/pull/46)
 
 ## 1.1.3
   * Require HTTPS [#44](https://github.com/singer-io/tap-activecampaign/pull/44)
