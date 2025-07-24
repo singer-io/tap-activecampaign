@@ -10,7 +10,7 @@ jobs:
       - run:
           name: 'Setup virtual env'
           command: |
-            uv venv python 3.9 /usr/local/share/virtualenvs/tap-activecampaign
+            uv venv --python 3.9 /usr/local/share/virtualenvs/tap-activecampaign
             source /usr/local/share/virtualenvs/tap-activecampaign/bin/activate
             uv pip install 'pip==21.1.3'
             uv pip install 'setuptools==56.0.0'
