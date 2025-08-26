@@ -24,10 +24,11 @@ def to_snake_case(input):
 
 def transform_json(this_json, stream_name, data_key):
     if data_key in this_json:
-        converted_json = to_snake_case(this_json[data_key])
+        json_list = this_json[data_key]
     else:
-        converted_json = to_snake_case(this_json)
+        json_list = this_json
 
+    converted_json = [to_snake_case(val) for val in json_list]
     fix_records(converted_json)
 
     return converted_json
