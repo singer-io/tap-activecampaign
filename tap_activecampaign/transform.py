@@ -1,6 +1,5 @@
 import re
 import singer
-import humps
 
 LOGGER = singer.get_logger()
 
@@ -19,12 +18,16 @@ def fix_records(this_json):
         new_json.append(rec)
 
 
+SPLIT_RE = re.compile(r"([\-_]*(?<=[^0-9])(?=[A-Z])[^A-Z]*[\-_]*)")
+def to_snake_case(input):
+    return "_".join(s for s in SPLIT_RE.split(input) if s)
+
 def transform_json(this_json, stream_name, data_key):
     if data_key in this_json:
-        converted_json = humps.decamelize(this_json[data_key])
+        converted_json = to_snake_case(this_json[data_key])
     else:
-        converted_json = humps.decamelize(this_json)
-    
+        converted_json = to_snake_case(this_json)
+
     fix_records(converted_json)
 
     return converted_json
