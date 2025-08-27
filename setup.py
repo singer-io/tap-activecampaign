@@ -10,6 +10,7 @@ setup(name='tap-activecampaign',
       py_modules=['tap_activecampaign'],
       install_requires=[
           'backoff==1.10.0',
+          'camel-converter==4.0.1',
           'requests==2.32.4',
           'singer-python==5.13.2'
       ],
