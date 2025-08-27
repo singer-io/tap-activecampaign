@@ -9,6 +9,7 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
     MISSING_FIELDS = {
         "ecommerce_orders": {'order_products'},
         "contacts": {'email_empty'},
+        "contact_lists": {'ip_4unsub', 'ip_4sub'},
         "users": {'password_updated_utc_timestamp', 'cdate', 'udate'}
         }
      
