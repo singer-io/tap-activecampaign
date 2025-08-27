@@ -21,9 +21,11 @@ def fix_records(this_json):
 
 def transform_json(this_json, stream_name, data_key):
     if data_key in this_json:
-        converted_json = dict_to_snake(this_json[data_key])
+        json_list = this_json[data_key]
     else:
-        converted_json = dict_to_snake(this_json)
+        json_list = this_json
+
+    converted_json = [dict_to_snake(list_item) for list_item in json_list]
 
     fix_records(converted_json)
 
