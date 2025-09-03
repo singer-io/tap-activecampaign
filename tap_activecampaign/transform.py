@@ -1,5 +1,5 @@
 import re
-from camel_converter import dict_to_snake
+import humps
 import singer
 
 LOGGER = singer.get_logger()
@@ -21,11 +21,9 @@ def fix_records(this_json):
 
 def transform_json(this_json, stream_name, data_key):
     if data_key in this_json:
-        json_list = this_json[data_key]
+        converted_json = humps.decamelize(this_json[data_key])
     else:
-        json_list = this_json
-
-    converted_json = [dict_to_snake(list_item) for list_item in json_list]
+        converted_json = humps.decamelize(this_json)
 
     fix_records(converted_json)
 
