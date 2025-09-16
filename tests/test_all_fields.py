@@ -9,24 +9,25 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
     MISSING_FIELDS = {
         "ecommerce_orders": {'order_products'},
         "contacts": {'email_empty'},
+        "contact_lists": {'ip_4unsub', 'ip_4sub'},
         "users": {'password_updated_utc_timestamp', 'cdate', 'udate'}
         }
-     
+
     def name(self):
         return "activecampaign_all_fields"
 
     def test_run(self):
         """
         • Verify no unexpected streams were replicated
-        • Verify that more than just the automatic fields are replicated for each stream. 
+        • Verify that more than just the automatic fields are replicated for each stream.
         • verify all fields for each stream are replicated
         """
-        
-        
+
+
         # Streams to verify all fields tests
         expected_streams = self.expected_check_streams()
 
-        # We are not able to generate data for `contact_conversions` stream. 
+        # We are not able to generate data for `contact_conversions` stream.
         # For `sms` stream it requires Professional plan of account. So, removing it from streams_to_test set.
         # BUG TDL-26417: Skip 'bounce_logs'
         expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms'}
@@ -62,8 +63,8 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
         # Verify no unexpected streams were replicated
         synced_stream_names = set(synced_records.keys())
         self.assertSetEqual(expected_streams, synced_stream_names)
-        
-        
+
+
         for stream in expected_streams:
             with self.subTest(stream=stream):
 
@@ -85,6 +86,6 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
 
                 # As we can't generate following field by activecampaign APIs and UI, so removed it form expectation list.
                 expected_all_keys = expected_all_keys - self.MISSING_FIELDS.get(stream, set())
-                    
+
                 # verify all fields for each stream are replicated
                 self.assertSetEqual(expected_all_keys, actual_all_keys)

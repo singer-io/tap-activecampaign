@@ -35,6 +35,8 @@ def get_schemas():
             replication_method=stream_metadata.get('replication_method', None)
         )
         mdata = metadata.to_map(mdata)
+        if stream_metadata.get('parent_tap_stream_id') != None:
+            mdata = metadata.write(mdata, (), 'parent-tap-stream-id', stream_metadata.get('parent_tap_stream_id'))
         # Loop through all keys and make replication keys of automatic inclusion
         for field_name in schema['properties'].keys():
             automatic_keys = ((stream_metadata.get('replication_keys') or []) +

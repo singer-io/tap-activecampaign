@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+  * Support python 3.12 [#49](https://github.com/singer-io/tap-activecampaign/pull/49)
+
+## 1.2.0
+  * Adds `parent_tap_stream_id` as discoverable metadata [#50](https://github.com/singer-io/tap-activecampaign/pull/50)
+
 ## 1.1.4
   * Bump requests to 2.32.4, singer-python to 5.13.2, backoff to 1.10.0 [#46](https://github.com/singer-io/tap-activecampaign/pull/46)
 

@@ -1117,7 +1117,8 @@ def flatten_streams():
             'key_properties': stream.key_properties,
             'replication_method': stream.replication_method,
             'replication_keys': stream.replication_keys,
-            'additional_automatic_keys': stream.additional_automatic_keys
+            'additional_automatic_keys': stream.additional_automatic_keys,
+            'parent_tap_stream_id': stream.parent
         }
 
     return flat_streams
