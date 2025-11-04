@@ -136,6 +136,10 @@ class ActiveCampaignClientV1(object):
             timer.tags[metrics.Tag.http_status_code] = response.status_code
 
         if response.status_code != 200:
+            LOGGER.error(f'method: {method}; '
+                         f'requested url: {url}; '
+                         f'params: {kwargs.get("params")}; '
+                         f'data: {kwargs.get("data")}')
             raise_for_error(response)
 
         # Log invalid JSON (e.g. unterminated string errors)
