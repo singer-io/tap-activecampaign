@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.0
+  * Support python 3.12 [#49](https://github.com/singer-io/tap-activecampaign/pull/49)
+
+## 1.2.0
+  * Adds `parent_tap_stream_id` as discoverable metadata [#50](https://github.com/singer-io/tap-activecampaign/pull/50)
+
+## 1.1.4
+  * Bump requests to 2.32.4, singer-python to 5.13.2, backoff to 1.10.0 [#46](https://github.com/singer-io/tap-activecampaign/pull/46)
+
+## 1.1.3
+  * Require HTTPS [#44](https://github.com/singer-io/tap-activecampaign/pull/44)
+
+## 1.1.2
+  * Upgrade requests lib version to 2.32.3 [#43](https://github.com/singer-io/tap-activecampaign/pull/43)
+
+## 1.1.1
+  * Update `bounce_logs` schema [#42](https://github.com/singer-io/tap-activecampaign/pull/42)
+
+## 1.1.0
+  * Update replication key for `contacts` stream [#41](https://github.com/singer-io/tap-activecampaign/pull/41)
+
 ## 1.0.1
   * Remove integer type for forms style.button.padding [#39](https://github.com/singer-io/tap-activecampaign/pull/39)
 

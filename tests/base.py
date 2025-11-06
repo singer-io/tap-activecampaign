@@ -15,6 +15,7 @@ class ActiveCampaignTest(unittest.TestCase):
     PRIMARY_KEYS = "table-key-properties"
     REPLICATION_METHOD = "forced-replication-method"
     REPLICATION_KEYS = "valid-replication-keys"
+    ADDITIONAL_AUTOMATIC_KEYS = 'additional_automatic_keys'
     FULL_TABLE = "FULL_TABLE"
     INCREMENTAL = "INCREMENTAL"
     OBEYS_START_DATE = "obey-start-date"
@@ -119,7 +120,8 @@ class ActiveCampaignTest(unittest.TestCase):
             'contacts': {
                 self.PRIMARY_KEYS: {'id'},
                 self.REPLICATION_METHOD: self.INCREMENTAL,
-                self.REPLICATION_KEYS: {'updated_timestamp'},
+                self.REPLICATION_KEYS: {'udate'},
+                self.ADDITIONAL_AUTOMATIC_KEYS: {'updated_timestamp'},
                 self.OBEYS_START_DATE: True
             },
             'contact_automations': {
@@ -418,12 +420,12 @@ class ActiveCampaignTest(unittest.TestCase):
         """return a dictionary with key of table name nd value of replication method"""
         return {table: properties.get(self.REPLICATION_METHOD, set()) for table, properties
                 in self.expected_metadata().items()}
-        
+
     def expected_automatic_fields(self):
         """return a dictionary with key of table name and set of value of automatic(primary key and bookmark field) fields"""
         auto_fields = {}
         for k, v in self.expected_metadata().items():
-            auto_fields[k] = v.get(self.PRIMARY_KEYS, set()) |  v.get(self.REPLICATION_KEYS, set())
+            auto_fields[k] = v.get(self.PRIMARY_KEYS, set()) |  v.get(self.REPLICATION_KEYS, set()) | v.get(self.ADDITIONAL_AUTOMATIC_KEYS, set())
         return auto_fields
 
     def run_and_verify_check_mode(self, conn_id):

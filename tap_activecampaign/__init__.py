@@ -1,6 +1,7 @@
 import sys
 import json
 import singer
+from singer import metadata, utils
 from tap_activecampaign.client import ActiveCampaignClient
 from tap_activecampaign.client_v1 import ActiveCampaignClientV1
 from tap_activecampaign.discover import discover
@@ -34,13 +35,14 @@ def main():
     api_version = ApiVersion(parsed_args.config.get('api_version', 'V3').upper())
     ac_clients = { ApiVersion.V1: ActiveCampaignClientV1, ApiVersion.V3: ActiveCampaignClient}
 
-    client_class = ac_clients[api_version]
-    with client_class(
-        parsed_args.config["api_url"],
-        parsed_args.config["api_token"],
-        parsed_args.config["user_agent"],
-        parsed_args.config.get("request_timeout"),
+    with ac_clients[api_version](
+        parsed_args.config['api_url'],
+        parsed_args.config['api_token'],
+        parsed_args.config['user_agent'],
+        parsed_args.config.get('request_timeout'),
+        parsed_args.config.get('client_settings', {}),
     ) as client:
+
         state = {}
         if parsed_args.state:
             state = parsed_args.state

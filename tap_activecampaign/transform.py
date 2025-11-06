@@ -1,6 +1,6 @@
 import re
-import singer
 import humps
+import singer
 
 LOGGER = singer.get_logger()
 
@@ -24,7 +24,7 @@ def transform_json(this_json, stream_name, data_key):
         converted_json = humps.decamelize(this_json[data_key])
     else:
         converted_json = humps.decamelize(this_json)
-    
+
     fix_records(converted_json)
 
     return converted_json
