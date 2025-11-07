@@ -36,10 +36,10 @@ def main():
 
     client_class = ac_clients[api_version]
     with client_class(
-        parsed_args.config["api_url"],
-        parsed_args.config["api_token"],
-        parsed_args.config["user_agent"],
-        parsed_args.config.get("request_timeout"),
+        parsed_args.config['api_url'],
+        parsed_args.config['api_token'],
+        parsed_args.config['user_agent'],
+        parsed_args.config.get('request_timeout'),
     ) as client:
         state = {}
         if parsed_args.state:
