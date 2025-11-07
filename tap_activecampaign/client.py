@@ -5,6 +5,8 @@ import socket
 import requests
 from singer import metrics, utils
 import singer
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
 
 LOGGER = singer.get_logger()
 REQUEST_TIMEOUT = 300
@@ -170,7 +172,8 @@ class ActiveCampaignClient(object):
                  api_url,
                  api_token,
                  user_agent=None,
-                 request_timeout=None):
+                 request_timeout=None,
+                 retry_settings=None):
         self.__api_url = api_url
         self.__api_token = api_token
         self.__user_agent = user_agent
@@ -186,6 +189,17 @@ class ActiveCampaignClient(object):
             self.request_timeout = float(request_timeout)
         else: # If value is 0, "0" or "" then set default to 300 seconds.
             self.request_timeout = REQUEST_TIMEOUT
+
+        retry_settings = retry_settings or {}
+        adapter = HTTPAdapter(
+            max_retries=Retry(
+                total=retry_settings.get('retry_count', 2),
+                backoff_factor=retry_settings.get('backoff_factor', 0.1),
+                status_forcelist=retry_settings.get('status_forcelist', [500, 502, 503, 504])
+            )
+        )
+        self.__session.mount("http://", adapter)
+        self.__session.mount("https://", adapter)
 
     # Backoff for Server5xxError, Server429Error, OSError and Exception with ConnectionResetError.
     @backoff.on_exception(backoff.expo,
