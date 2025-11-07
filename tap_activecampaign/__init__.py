@@ -40,6 +40,7 @@ def main():
         parsed_args.config['api_token'],
         parsed_args.config['user_agent'],
         parsed_args.config.get('request_timeout'),
+        parsed_args.config.get('retry_settings', {}),
     ) as client:
         state = {}
         if parsed_args.state:
