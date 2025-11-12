@@ -101,7 +101,7 @@ class ActiveCampaignClientV1(object):
         headers['Api-Token'] = self.__api_token
         headers['Accept'] = 'application/json'
         
-        url = f"{self.base_url}/admin/api.php"
+        url = f'{self.base_url}/admin/api.php?api_action=user_me&api_output=json'
 
         response = self.__session.get(
             # Simple endpoint that returns 1 record w/ default organization URN
