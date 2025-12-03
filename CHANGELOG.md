@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.3.1
+  * Retry for the ActiveCampaign ForbiddenError [#52](https://github.com/singer-io/tap-activecampaign/pull/52)
+
 ## 1.3.0
   * Support python 3.12 [#49](https://github.com/singer-io/tap-activecampaign/pull/49)
 
