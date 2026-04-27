@@ -22,12 +22,14 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
 
         # We are not able to generate data for `contact_conversions` stream.
         # For `sms` it requires Enterprise plan of account. So, removing it from streams_to_test set.
-        streams_to_test = streams_to_test - {
+        # Streams that cannot have data generated
+        streams_to_skip = {
             'contact_conversions', 'bounce_logs',
             'contact_automations', 'goals', 'sms',
             'contact_data', 'contact_emails',
             'email_activities', 'site_messages'
         }
+        streams_to_test = streams_to_test - streams_to_skip
         
         conn_id = connections.ensure_connection(self)
 
