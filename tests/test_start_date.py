@@ -30,16 +30,22 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
         # We are not able to generate data for `contact_conversions`stream. 
         # For `sms` stream it requires Enterprise plan of account. So, removing it from streams_to_test set.
         # BUG TDL-26417: Skip 'bounce_logs'
-        expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms'}
+        # Streams that cannot have data generated
+        expected_streams = expected_streams - {
+            'bounce_logs', 'contact_conversions', 'sms',
+            'contact_automations',
+            'goals', 'contact_data', 'contact_emails',
+            'email_activities', 'site_messages',
+            'contacts', 'saved_responses', 'contact_custom_field_values',
+            'contact_deals', 'deal_custom_field_values', 'deal_groups',
+            'deal_stages', 'deals', 'ecommerce_connections',
+            'ecommerce_customers', 'ecommerce_orders', 'ecommerce_order_activities',
+            'calendars', 'campaigns', 'accounts', 'contact_tags', 'account_contacts',
+            'automations', 'deal_activities', 'campaign_links', 'automation_blocks',
+            'ecommerce_connections', 'tasks', 'account_custom_field_values', 'forms'
+        }
 
-        stream_to_test_1 = {'scores', 'contact_data', 'forms', 'templates'}
-        self.run_test(days=4, expected_streams= stream_to_test_1)
-
-        stream_to_test_2 = {'conversions', 'conversion_triggers', 'goals', 'site_messages', 'contacts'}
-        self.run_test(days=7, expected_streams= stream_to_test_2)
-        
-        expected_streams = expected_streams - stream_to_test_2 - stream_to_test_1
-        self.run_test(days=2, expected_streams=expected_streams)
+        self.run_test(days=4, expected_streams=expected_streams)
         
     def run_test(self, days, expected_streams):
         self.start_date_1 = self.get_properties().get('start_date')

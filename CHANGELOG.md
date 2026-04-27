@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.4.0
+  * Replace base url with /users/me for token validation [#53](https://github.com/singer-io/tap-activecampaign/pull/53)
+
 ## 1.3.1
   * Retry for the ActiveCampaign ForbiddenError [#52](https://github.com/singer-io/tap-activecampaign/pull/52)
 

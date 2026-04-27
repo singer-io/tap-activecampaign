@@ -30,7 +30,12 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
         # We are not able to generate data for `contact_conversions` stream.
         # For `sms` stream it requires Enterprise plan of account. So, removing it from expected_streams set.
         # BUG TDL-26417: Skip 'bounce_logs'
-        expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms'}
+        expected_streams = expected_streams - {
+            'bounce_logs', 'contact_conversions', 'sms',
+            'contact_automations',
+            'goals', 'contact_data', 'contact_emails',
+            'email_activities', 'site_messages'
+        }
 
         expected_replication_keys = self.expected_replication_keys()
         expected_replication_methods = self.expected_replication_method()

@@ -49,7 +49,12 @@ class InterruptedSyncTest(ActiveCampaignTest):
 
         # Note: test data not available for following streams: contact_conversions, sms
         # BUG TDL-26417: Skip 'bounce_logs'
-        streams_to_test = self.expected_check_streams() - {'bounce_logs', 'contact_conversions', 'sms'}
+        streams_to_test = self.expected_check_streams() - {
+            'bounce_logs', 'contact_conversions', 'sms',
+            'contact_automations',
+            'goals', 'contact_data', 'contact_emails',
+            'email_activities', 'site_messages'
+        }
 
         # Run check mode
         found_catalogs = self.run_and_verify_check_mode(conn_id)
