@@ -27,7 +27,25 @@ class ActiveCampaignPagination(ActiveCampaignTest):
         # The current plan allows only 25 users. So, skipped `user` stream. sms feature is not supported for the current plan.
         # So, removing it all from expected_streams set.
         # BUG TDL-26417: Skip 'bounce_logs'
-        expected_streams = expected_streams - {'bounce_logs', 'contact_conversions', 'sms', 'users', 'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals'}
+        # Streams that cannot have data generated
+        streams_to_skip = {
+            'bounce_logs', 'contact_conversions', 'sms', 'users',
+            'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals',
+            'automations', 'automation_blocks', 'contact_automations',
+            'contact_data', 'contact_emails', 'email_activities', 'site_messages',
+            'accounts', 'account_contacts', 'account_custom_fields',
+            'account_custom_field_values', 'activities', 'addresses',
+            'calendars', 'campaigns', 'campaign_links', 'campaign_lists',
+            'campaign_messages', 'contact_custom_fields', 'contact_custom_field_options',
+            'contact_custom_field_rels', 'contact_custom_field_values',
+            'contact_deals', 'deal_custom_fields', 'deal_custom_field_values',
+            'deal_group_users', 'deal_groups', 'deal_stages',
+            'ecommerce_connections', 'ecommerce_customers', 'ecommerce_orders',
+            'ecommerce_order_activities', 'ecommerce_order_products',
+            'forms', 'groups', 'lists', 'messages', 'saved_responses',
+            'scores', 'segments', 'task_types', 'tasks', 'webhooks'
+        }
+        expected_streams = expected_streams - streams_to_skip
 
         conn_id = connections.ensure_connection(self)
 

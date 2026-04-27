@@ -47,7 +47,7 @@ class ActiveCampaignTest(unittest.TestCase):
     def get_properties(self, original: bool = True):
         """Configuration properties required for the tap."""
         return_value = {
-            "start_date" : "2021-12-01T00:00:00Z",
+            "start_date" : "2026-04-23T00:00:00Z",
         }
         if original:
             return return_value

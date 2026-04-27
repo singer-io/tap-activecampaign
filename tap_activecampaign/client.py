@@ -178,7 +178,7 @@ class ActiveCampaignClient(object):
         self.__user_agent = user_agent
         self.__session = requests.Session()
         self.__verified = False
-        self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
+        self.base_url = '{}/api/{}/users/me'.format(self.__api_url, DEFAULT_API_VERSION)
 
         if not is_api_url_valid(api_url):
             raise Exception('Error: api_url is not valid')
