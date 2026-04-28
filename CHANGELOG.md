@@ -2,6 +2,7 @@
 
 ## 1.4.0
   * Replace base url with /users/me for token validation [#53](https://github.com/singer-io/tap-activecampaign/pull/53)
+  * Bump requests from 2.32.4 to 2.33.0 [#54](https://github.com/singer-io/target-stitch/pull/54)
 
 ## 1.3.1
   * Retry for the ActiveCampaign ForbiddenError [#52](https://github.com/singer-io/tap-activecampaign/pull/52)
