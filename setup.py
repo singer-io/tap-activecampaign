@@ -3,16 +3,16 @@
 from setuptools import setup, find_packages
 
 setup(name='tap-activecampaign',
-      version='1.4.0',
-      description='Singer.io tap for extracting data from the Google Search Console API',
+      version='1.5.0',
+      description='Singer.io tap for extracting data from the ActiveCampaign API',
       author='jeff.huth@bytecode.io',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
       py_modules=['tap_activecampaign'],
       install_requires=[
-          'backoff==1.10.0',
+          'backoff==2.2.1',
           'pyhumps==3.8.0',
-          'requests==2.33.0',
-          'singer-python==5.13.2'
+          'requests==2.34.2',
+          'singer-python==6.8.0'
       ],
       entry_points='''
           [console_scripts]
@@ -30,7 +30,8 @@ setup(name='tap-activecampaign',
               'ipdb',
           ],
           'test': [
+              'coverage',
               'pylint',
-              'nose',
+              'pytest',
           ]
       })
