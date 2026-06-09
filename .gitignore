@@ -18,3 +18,9 @@ venv/
 build/
 tap_target_commands.sh
 .vscode
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
