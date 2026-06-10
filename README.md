@@ -6,7 +6,7 @@ spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
 
 This tap:
 
-- Pulls raw data from the [ActiveCampaign v3 API](https://developers.activecampaign.com/reference#overview)
+- Pulls raw data from the [ActiveCampaign v3 API](https://developers.activecampaign.com/reference#overview) and the [ActiveCampaign v1 API](https://www.activecampaign.com/api/overview.php)
 - Extracts the following resources:
   - [accounts](https://developers.activecampaign.com/reference/list-all-accounts)
   - [account_contacts](https://developers.activecampaign.com/reference/list-all-associations-1)
@@ -30,6 +30,10 @@ This tap:
   - [deal_groups](https://developers.activecampaign.com/reference/list-all-pipelines)
   - [deal_custom_fields](https://developers.activecampaign.com/reference/retrieve-all-custom-deal-field-meta)
   - [deal_custom_field_values](https://developers.activecampaign.com/reference/list-all-custom-fielddata-field-values)
+  - [campaign_report_open_list](https://www.activecampaign.com/api/example.php?call=campaign_report_open_list) *(V1 API)*
+  - [campaign_report_unopen_list](https://www.activecampaign.com/api/example.php?call=campaign_report_unopen_list) *(V1 API)*
+  - [campaign_report_bounce_list](https://www.activecampaign.com/api/example.php?call=campaign_report_bounce_list) *(V1 API)*
+  - [campaign_report_unsubscription_list](https://www.activecampaign.com/api/example.php?call=campaign_report_unsubscription_list) *(V1 API)*
 
 
 
@@ -210,7 +214,79 @@ This tap:
   - Bookmark: mdate
 - Transformations: camelCase to snake_case, remove links node
 
+[campaign_messages](https://developers.activecampaign.com/reference/list-all-campaigns)
+- Endpoint: https://{subdomain}.api-us1.com/campaignMessages
+- Data key: campaignMessages
+- Primary keys: id
+- Replication strategy: Full Table
+- Transformations: camelCase to snake_case, remove links node
+- Note: Each record represents a message (email variant) within a campaign, with per-message delivery and engagement stats (`send_amt`, `opens`, `uniqueopens`, `linkclicks`, `hardbounces`, `softbounces`, `unsubscribes`, etc.). The `messageid` and `campaignid` fields are the inputs required by the `campaign_report_unopen_list` V1 stream — query this stream first to build the `campaign_messages` pairs for that config.
 
+[campaign_report_open_list](https://www.activecampaign.com/api/example.php?call=campaign_report_open_list)
+- Endpoint: V1 API — `/admin/api.php?api_action=campaign_report_open_list`
+- Primary keys: subscriberid, campaignid
+- Replication strategy: Incremental
+  - Bookmark: tstamp (1-day overlap applied)
+- Requires: `extra_params.campaigns` (list of campaign IDs)
+- Transformations: numeric-keyed V1 response flattened to list
+
+[campaign_report_unopen_list](https://www.activecampaign.com/api/example.php?call=campaign_report_unopen_list)
+- Endpoint: V1 API — `/admin/api.php?api_action=campaign_report_unopen_list`
+- Primary keys: subscriberid, campaignid
+- Replication strategy: Incremental
+  - Bookmark: tstamp (1-day overlap applied)
+- Requires: `extra_params.campaign_messages` (list of `[campaignid, messageid]` pairs — both are required by this endpoint)
+- Transformations: numeric-keyed V1 response flattened to list
+
+[campaign_report_bounce_list](https://www.activecampaign.com/api/example.php?call=campaign_report_bounce_list)
+- Endpoint: V1 API — `/admin/api.php?api_action=campaign_report_bounce_list`
+- Primary keys: id, campaignid
+- Replication strategy: Incremental
+  - Bookmark: tstamp (1-day overlap applied)
+- Requires: `extra_params.campaigns` (list of campaign IDs)
+- Transformations: numeric-keyed V1 response flattened to list
+
+[campaign_report_unsubscription_list](https://www.activecampaign.com/api/example.php?call=campaign_report_unsubscription_list)
+- Endpoint: V1 API — `/admin/api.php?api_action=campaign_report_unsubscription_list`
+- Primary keys: subscriberid, campaignid
+- Replication strategy: Incremental
+  - Bookmark: tstamp (1-day overlap applied)
+- Requires: `extra_params.campaigns` (list of campaign IDs)
+- Transformations: numeric-keyed V1 response flattened to list
+
+## V1 Campaign Report Streams — Configuration
+
+The four `campaign_report_*` streams use the legacy V1 API and require additional parameters in `config.json` under `extra_params`.
+
+**For `campaign_report_open_list`, `campaign_report_bounce_list`, `campaign_report_unsubscription_list`:**
+
+```json
+{
+  "api_url": "https://<account>.api-us1.com",
+  "api_token": "<token>",
+  "start_date": "2024-01-01T00:00:00Z",
+  "extra_params": {
+    "campaigns": [123, 456, 789]
+  }
+}
+```
+
+**For `campaign_report_unopen_list`** (requires both campaign ID and message ID per request):
+
+```json
+{
+  "api_url": "https://<account>.api-us1.com",
+  "api_token": "<token>",
+  "start_date": "2024-01-01T00:00:00Z",
+  "extra_params": {
+    "campaign_messages": [[123, 10], [123, 20], [456, 30]]
+  }
+}
+```
+
+Each entry in `campaign_messages` is a `[campaignid, messageid]` pair. You can find message IDs from the `campaign_messages` stream (v3 API).
+
+Optional: add `"parallel_threads": 4` to `extra_params` to control the thread pool size for concurrent campaign fetching (default: Python's `min(32, cpu_count + 4)`).
 
 ## Authentication
 

@@ -619,7 +619,7 @@ class Campaign_report_open_list(ActiveCampaign):
         ):
             params = {
                 "page": page,
-                "campaignid": campaignid,
+                **self._campaign_params(campaignid),
                 **static_params,  # adds in endpoint specific, sort, filter params
             }
 
@@ -634,7 +634,7 @@ class Campaign_report_open_list(ActiveCampaign):
             )
 
             LOGGER.info(
-                "URL for Stream {}: {}{}{}".format(
+                "URL for Stream {}: {}/{}{}".format(
                     self.stream_name,
                     self.client.base_url,
                     path,
@@ -675,6 +675,9 @@ class Campaign_report_open_list(ActiveCampaign):
             )
 
         return max_bookmark_value, endpoint_total
+
+    def _campaign_params(self, campaignid):
+        return {"campaignid": campaignid}
 
     def transform_data(self, data):
         """
@@ -722,6 +725,57 @@ class Campaign_report_open_list(ActiveCampaign):
         state["bookmarks"][stream] = value
         LOGGER.info("Write state for stream: {}, value: {}".format(stream, value))
         singer.write_state(state)
+
+
+class Campaign_report_unopen_list(Campaign_report_open_list):
+    """
+    View all unopens for a specific campaign.
+    Reference: https://www.activecampaign.com/api/example.php?call=campaign_report_unopen_list
+    """
+    stream_name = "campaign_report_unopen_list"
+    path = "campaign_report_unopen_list"
+    data_key = "campaign_report_unopen_list_v1"
+    params = {}
+    key_properties = ["subscriberid", "campaignid", "messageid"]
+    extra_fields = ["campaignid", "messageid"]
+
+    def sync(self, client, catalog, state, start_date, path,
+             selected_streams=None, parent=None, parent_id=None, **kwargs):
+        campaign_messages = kwargs.get("campaign_messages", [])
+        if not campaign_messages:
+            LOGGER.warning("campaign_report_unopen_list: no 'campaign_messages' in extra_params, skipping sync")
+            return 0
+        kwargs["campaigns"] = campaign_messages
+        return super().sync(client, catalog, state, start_date, path,
+                            selected_streams, parent, parent_id, **kwargs)
+
+    def _campaign_params(self, campaign_message_pair):
+        campaignid, messageid = campaign_message_pair
+        return {"campaignid": campaignid, "messageid": messageid}
+
+
+class Campaign_report_bounce_list(Campaign_report_open_list):
+    """
+    View all bounces for a specific campaign.
+    Reference: https://www.activecampaign.com/api/example.php?call=campaign_report_bounce_list
+    """
+    stream_name = "campaign_report_bounce_list"
+    path = "campaign_report_bounce_list"
+    data_key = "campaign_report_bounce_list_v1"
+    key_properties = ["campaignid", "subscriberid", "messageid"]
+    extra_fields = []
+    params = {}
+
+
+class Campaign_report_unsubscription_list(Campaign_report_open_list):
+    """
+    View all unsubscriptions for a specific campaign.
+    Reference: https://www.activecampaign.com/api/example.php?call=campaign_report_unsubscription_list
+    """
+    stream_name = "campaign_report_unsubscription_list"
+    path = "campaign_report_unsubscription_list"
+    data_key = "campaign_report_unsubscription_list_v1"
+    params = {}
 
 
 class Accounts(ActiveCampaign):
@@ -1348,6 +1402,9 @@ class Sms(ActiveCampaign):
 
 STREAMS = {
     'campaign_report_open_list': Campaign_report_open_list,
+    'campaign_report_unopen_list': Campaign_report_unopen_list,
+    'campaign_report_bounce_list': Campaign_report_bounce_list,
+    'campaign_report_unsubscription_list': Campaign_report_unsubscription_list,
     'accounts': Accounts,
     'account_contacts': AccountContact,
     'account_custom_fields': AccountCustomFields,

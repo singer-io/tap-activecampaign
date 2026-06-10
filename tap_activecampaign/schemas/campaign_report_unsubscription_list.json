@@ -1,0 +1,32 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "tstamp": {
+        "type": ["null", "string"],
+        "format": "date-time"
+      },
+      "tstamp_iso": {
+        "type": ["null", "string"]
+      },
+      "udate": {
+        "type": ["null", "string"],
+        "format": "date-time"
+      },
+      "udate_iso": {
+        "type": ["null", "string"]
+      },
+      "subscriberid": {
+        "type": ["null", "integer"]
+      },
+      "email": {
+        "type": ["null", "string"]
+      },
+      "unsubreason": {
+        "type": ["null", "string"]
+      },
+      "campaignid": {
+        "type": ["null", "integer"]
+      }
+    }
+}

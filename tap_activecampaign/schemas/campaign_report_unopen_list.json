@@ -1,0 +1,25 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "tstamp": {
+        "type": ["null", "string"],
+        "format": "date-time"
+      },
+      "tstamp_iso": {
+        "type": ["null", "string"]
+      },
+      "subscriberid": {
+        "type": ["null", "integer"]
+      },
+      "email": {
+        "type": ["null", "string"]
+      },
+      "campaignid": {
+        "type": ["null", "integer"]
+      },
+      "messageid": {
+        "type": ["null", "integer"]
+      }
+    }
+}
