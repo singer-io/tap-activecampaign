@@ -1,0 +1,43 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": ["null", "integer"]
+      },
+      "email": {
+        "type": ["null", "string"]
+      },
+      "subscriberid": {
+        "type": ["null", "integer"]
+      },
+      "listid": {
+        "type": ["null", "integer"]
+      },
+      "campaignid": {
+        "type": ["null", "integer"]
+      },
+      "messageid": {
+        "type": ["null", "integer"]
+      },
+      "tstamp": {
+        "type": ["null", "string"],
+        "format": "date-time"
+      },
+      "type": {
+        "type": ["null", "string"]
+      },
+      "code": {
+        "type": ["null", "string"]
+      },
+      "counted": {
+        "type": ["null", "integer"]
+      },
+      "reason": {
+        "type": ["null", "string"]
+      },
+      "descript": {
+        "type": ["null", "string"]
+      }
+    }
+}
