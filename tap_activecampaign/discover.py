@@ -2,7 +2,7 @@ import singer
 from singer.catalog import Catalog, CatalogEntry, Schema
 from tap_activecampaign.schema import get_schemas
 from tap_activecampaign.streams import STREAMS, flatten_streams
-from tap_activecampaign.client import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
+from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
 
 LOGGER = singer.get_logger()
 
@@ -18,7 +18,7 @@ def check_stream_access(client, stream_name, path):
     Re-raises any other exception.
     """
     try:
-        client.get(path=path, params='limit=1', endpoint=stream_name)
+        client.get(path=path, params={'limit': 1}, endpoint=stream_name)
         return True
     except (ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError):
         return False

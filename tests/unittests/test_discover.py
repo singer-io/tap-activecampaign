@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from tap_activecampaign.client import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
+from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
 from tap_activecampaign.discover import (
     check_stream_access,
     _get_accessible_streams,
@@ -44,7 +44,7 @@ class TestCheckStreamAccess(unittest.TestCase):
         client = _make_client(return_value={'contacts': []})
         result = check_stream_access(client, 'contacts', 'contacts')
         self.assertTrue(result)
-        client.get.assert_called_once_with(path='contacts', params='limit=1', endpoint='contacts')
+        client.get.assert_called_once_with(path='contacts', params={'limit': 1}, endpoint='contacts')
 
     def test_returns_false_on_forbidden_error(self):
         """A 403 ForbiddenError returns False without re-raising."""
@@ -131,9 +131,6 @@ class TestGetAccessibleStreams(unittest.TestCase):
 
     def test_warning_logged_for_inaccessible_streams(self):
         """A warning is logged listing the inaccessible streams."""
-        client = _make_client(side_effect=ActiveCampaignForbiddenError('403'))
-        # stream_b is the only accessible one; stream_a blocked → that means all are blocked
-        # Use only stream_b accessible to verify warning content
         schemas_two = {'stream_a': SCHEMAS['stream_a'], 'stream_b': SCHEMAS['stream_b']}
         flat_two = {'stream_a': FLAT_STREAMS['stream_a'], 'stream_b': FLAT_STREAMS['stream_b']}
 

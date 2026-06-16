@@ -1,8 +1,6 @@
 import sys
 import json
-import argparse
 import singer
-from singer import metadata, utils
 from tap_activecampaign.client import ActiveCampaignClient
 from tap_activecampaign.discover import discover
 from tap_activecampaign.sync import sync
