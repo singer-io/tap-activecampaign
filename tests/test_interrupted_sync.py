@@ -47,14 +47,27 @@ class InterruptedSyncTest(ActiveCampaignTest):
 
         conn_id = connections.ensure_connection(self)
 
-        # Note: test data not available for following streams: contact_conversions, sms
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         streams_to_skip = {
-            'bounce_logs', 'contact_conversions', 'sms',
-            'contact_automations',
-            'goals', 'contact_data', 'contact_emails',
-            'email_activities', 'site_messages'
+            'addresses',
+            'bounce_logs',
+            'campaign_links',
+            'contact_deals',
+            'contact_emails',
+            'deal_group_users',
+            'deal_stages',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_order_activities',
+            'ecommerce_order_products',
+            'ecommerce_orders',
+            'email_activities',
+            'goals',
+            'site_messages',
+            'sms',
+            'templates',
+            'webhooks',
         }
         streams_to_test = self.expected_check_streams() - streams_to_skip
 

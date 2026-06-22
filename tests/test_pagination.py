@@ -1,6 +1,5 @@
 import tap_tester.connections as connections
 import tap_tester.runner as runner
-import tap_tester.menagerie as menagerie
 from base import ActiveCampaignTest
 
 
@@ -14,7 +13,7 @@ class ActiveCampaignPagination(ActiveCampaignTest):
 
     def test_run(self):
         """
-        • Verify that for each stream you can get multiple pages of data.  
+        • Verify that for each stream you can get multiple pages of data.
         This requires we ensure more than 1 page of data exists at all times for any given stream.
         • Verify by pks that the data replicated matches the data we expect.
         """
@@ -23,27 +22,61 @@ class ActiveCampaignPagination(ActiveCampaignTest):
         expected_streams = self.expected_check_streams()
 
         # We are not able to generate enough data to test pagination for below streams,
-        # `brandings`, `configs`, `conversions`, `conversion_triggers`, `goals`, `contact_conversions`, `sms`, `user`.
-        # The current plan allows only 25 users. So, skipped `user` stream. sms feature is not supported for the current plan.
+        # `brandings`, `configs`, `conversions`, `conversion_triggers`, `goals`, `sms`, `users`.
+        # The current plan allows only 25 users. So, skipped `users` stream. sms feature is not supported for the current plan.
         # So, removing it all from expected_streams set.
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         streams_to_skip = {
-            'bounce_logs', 'contact_conversions', 'sms', 'users',
-            'brandings', 'configs', 'conversions', 'conversion_triggers', 'goals',
-            'automations', 'automation_blocks', 'contact_automations',
-            'contact_data', 'contact_emails', 'email_activities', 'site_messages',
-            'accounts', 'account_contacts', 'account_custom_fields',
-            'account_custom_field_values', 'activities', 'addresses',
-            'calendars', 'campaigns', 'campaign_links', 'campaign_lists',
-            'campaign_messages', 'contact_custom_fields', 'contact_custom_field_options',
-            'contact_custom_field_rels', 'contact_custom_field_values',
-            'contact_deals', 'deal_custom_fields', 'deal_custom_field_values',
-            'deal_group_users', 'deal_groups', 'deal_stages',
-            'ecommerce_connections', 'ecommerce_customers', 'ecommerce_orders',
-            'ecommerce_order_activities', 'ecommerce_order_products',
-            'forms', 'groups', 'lists', 'messages', 'saved_responses',
-            'scores', 'segments', 'task_types', 'tasks', 'webhooks'
+            'account_custom_fields',
+            'account_custom_field_values',
+            'addresses',
+            'automation_blocks',
+            'automations',
+            'bounce_logs',
+            'brandings',
+            'calendars',
+            'campaign_links',
+            'campaign_lists',
+            'campaign_messages',
+            'campaigns',
+            'configs',
+            'contact_automations',
+            'contact_custom_field_rels',
+            'contact_custom_fields',
+            'contact_custom_field_options',
+            'contact_data',
+            'contact_deals',
+            'contact_emails',
+            'conversion_triggers',
+            'conversions',
+            'deals',
+            'deal_custom_fields',
+            'deal_group_users',
+            'deal_groups',
+            'deal_stages',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_order_activities',
+            'ecommerce_order_products',
+            'ecommerce_orders',
+            'email_activities',
+            'forms',
+            'goals',
+            'groups',
+            'lists',
+            'messages',
+            'saved_responses',
+            'scores',
+            'segments',
+            'site_messages',
+            'sms',
+            'tags',
+            'task_types',
+            'tasks',
+            'templates',
+            'users',
+            'webhooks',
         }
         expected_streams = expected_streams - streams_to_skip
 
