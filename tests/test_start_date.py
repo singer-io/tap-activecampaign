@@ -16,6 +16,18 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
     def name(self):
         return "activecampaign_start_date_test"
 
+    def get_properties(self, original: bool = True):
+        """Override start date to fall within actual test data range.
+        start_date_1 = 2026-06-14, start_date_2 = 2026-06-18 (days=4), splitting
+        data that spans 2026-06-15 through 2026-06-19."""
+        return_value = {
+            "start_date": "2026-06-14T00:00:00Z",
+        }
+        if original:
+            return return_value
+        return_value["start_date"] = self.start_date
+        return return_value
+
     def test_run(self):
         """
         Test that the start_date configuration is respected
