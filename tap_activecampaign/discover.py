@@ -1,76 +1,64 @@
-import singer
+﻿import singer
 from singer.catalog import Catalog, CatalogEntry, Schema
 from tap_activecampaign.schema import get_schemas
 from tap_activecampaign.streams import STREAMS, flatten_streams
-from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
+from tap_activecampaign.exceptions import ActiveCampaignDiscoveryForbiddenError
 
 LOGGER = singer.get_logger()
 
 
-class ActiveCampaignDiscoveryForbiddenError(Exception):
-    pass
-
-
-def check_stream_access(client, stream_name, path):
+def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> None:
     """
-    Return True if the stream endpoint is accessible with the current credentials,
-    False if a 403 or 401 response is received.
-    Re-raises any other exception.
+    Remove child streams from the catalog whose parent stream was excluded.
+    Mutates schemas and field_metadata in place.
     """
-    try:
-        client.get(path=path, params={'limit': 1}, endpoint=stream_name)
-        return True
-    except (ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError):
-        return False
+    for name, stream_cls in list(STREAMS.items()):
+        if name in schemas and stream_cls.parent and stream_cls.parent not in schemas:
+            LOGGER.warning(
+                "Stream '%s' excluded from catalog because its parent stream '%s' is not accessible.",
+                name, stream_cls.parent,
+            )
+            schemas.pop(name)
+            field_metadata.pop(name)
 
 
-def _get_accessible_streams(client, schemas, flat_streams):
+def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
     """
-    Probe each parent stream endpoint to determine which streams the API token
-    can access. Returns a filtered copy of `schemas` that excludes inaccessible
-    parent streams and any child streams whose parent is inaccessible.
-
-    Raises ActiveCampaignDiscoveryForbiddenError if no streams are accessible.
+    Probe each parent stream for read access and remove inaccessible streams
+    (and their children) from schemas and field_metadata in place.
+    Raises ActiveCampaignDiscoveryForbiddenError if no parent streams are accessible.
     """
-    inaccessible_streams = []
+    inaccessible_streams = [
+        stream_name
+        for stream_name, stream_obj in STREAMS.items()
+        if stream_name in schemas
+        and not stream_obj(client=client).check_access()
+    ]
 
-    for stream_name in list(schemas.keys()):
-        # Skip child streams — their paths require a parent record id
-        if flat_streams.get(stream_name, {}).get('parent_tap_stream_id'):
-            continue
+    for stream_name in inaccessible_streams:
+        schemas.pop(stream_name, None)
+        field_metadata.pop(stream_name, None)
 
-        stream_cls = STREAMS[stream_name]
-        if not check_stream_access(client, stream_name, stream_cls.path):
-            inaccessible_streams.append(stream_name)
+    _prune_inaccessible_children(schemas, field_metadata)
 
     if inaccessible_streams:
+        total_parent_streams = len([s for s in STREAMS.values() if not s.parent])
+        if len(inaccessible_streams) == total_parent_streams:
+            raise ActiveCampaignDiscoveryForbiddenError(
+                "HTTP-error-code: 403, Error: The credentials do not have 'read' access to any supported streams."
+            )
         LOGGER.warning(
-            'The following streams are not accessible and will be excluded '
-            'from the catalog: %s', ', '.join(inaccessible_streams)
+            "No 'read' access to stream(s): '%s'. Excluded from catalog.",
+            ", ".join(inaccessible_streams),
         )
-
-    # Exclude inaccessible parent streams and their child streams
-    filtered_schemas = {
-        name: schema
-        for name, schema in schemas.items()
-        if name not in inaccessible_streams
-        and flat_streams.get(name, {}).get('parent_tap_stream_id') not in inaccessible_streams
-    }
-
-    if not filtered_schemas:
-        raise ActiveCampaignDiscoveryForbiddenError(
-            'Access denied: no streams are accessible with the provided credentials.'
-        )
-
-    return filtered_schemas
 
 
 def discover(client):
     schemas, field_metadata = get_schemas()
-    catalog = Catalog([])
+    _apply_access_checks(client, schemas, field_metadata)
 
+    catalog = Catalog([])
     flat_streams = flatten_streams()
-    schemas = _get_accessible_streams(client, schemas, flat_streams)
 
     for stream_name, schema_dict in schemas.items():
         try:

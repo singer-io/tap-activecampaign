@@ -40,6 +40,9 @@ class ActiveCampaignInternalServerError(Server5xxError):
     """HTTP 500+ - Server Error."""
     pass
 
+class ActiveCampaignDiscoveryForbiddenError(Exception):
+    pass
+
 
 # Errors Reference: https://developers.activecampaign.com/reference#errors
 STATUS_CODE_EXCEPTION_MAPPING = {

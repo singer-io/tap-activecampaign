@@ -1,11 +1,15 @@
 import unittest
 from unittest.mock import MagicMock, patch
-from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
-from tap_activecampaign.discover import (
-    check_stream_access,
-    _get_accessible_streams,
-    discover,
+from tap_activecampaign.exceptions import (
+    ActiveCampaignForbiddenError,
+    ActiveCampaignUnauthorizedError,
     ActiveCampaignDiscoveryForbiddenError,
+)
+from tap_activecampaign.streams import ActiveCampaign
+from tap_activecampaign.discover import (
+    _prune_inaccessible_children,
+    _apply_access_checks,
+    discover,
 )
 
 
@@ -25,150 +29,233 @@ def _make_client(side_effect=None, return_value=None):
     return client
 
 
-def _make_stream_cls(path):
-    """Return a minimal mock stream class with a path attribute."""
-    cls = MagicMock()
-    cls.path = path
+def _make_stream_instance(stream_name, path, parent=None, client=None):
+    """Return an ActiveCampaign base instance with the given attributes set."""
+    instance = ActiveCampaign(client=client or _make_client())
+    instance.stream_name = stream_name
+    instance.path = path
+    instance.parent = parent
+    return instance
+
+
+def _make_stream_cls(parent=None, accessible=True):
+    """Return a mock stream *class* with a .parent attribute and check_access() behaviour."""
+    inst = MagicMock()
+    inst.check_access.return_value = accessible
+    inst.parent = parent
+    cls = MagicMock(return_value=inst)
+    cls.parent = parent
     return cls
 
 
 # ---------------------------------------------------------------------------
-# TestCheckStreamAccess
+# TestCheckAccess
 # ---------------------------------------------------------------------------
 
-class TestCheckStreamAccess(unittest.TestCase):
-    """Unit tests for check_stream_access()."""
+class TestCheckAccess(unittest.TestCase):
+    """Unit tests for ActiveCampaign.check_access()."""
 
     def test_returns_true_when_accessible(self):
         """A successful GET returns True."""
-        client = _make_client(return_value={'contacts': []})
-        result = check_stream_access(client, 'contacts', 'contacts')
-        self.assertTrue(result)
-        client.get.assert_called_once_with(path='contacts', params={'limit': 1}, endpoint='contacts')
+        client = _make_client(return_value={})
+        stream = _make_stream_instance('contacts', 'contacts', client=client)
+        self.assertTrue(stream.check_access())
+        client.get.assert_called_once_with(
+            path='contacts', params={'limit': 1}, endpoint='contacts'
+        )
+
+    def test_child_stream_always_returns_true_without_calling_api(self):
+        """Child streams always return True; the API is never called."""
+        client = _make_client()
+        stream = _make_stream_instance(
+            'ecommerce_order_products',
+            'ecomOrders/{}/orderProducts',
+            parent='ecommerce_orders',
+            client=client,
+        )
+        self.assertTrue(stream.check_access())
+        client.get.assert_not_called()
 
     def test_returns_false_on_forbidden_error(self):
         """A 403 ForbiddenError returns False without re-raising."""
         client = _make_client(side_effect=ActiveCampaignForbiddenError('403 Forbidden'))
-        result = check_stream_access(client, 'contacts', 'contacts')
-        self.assertFalse(result)
+        stream = _make_stream_instance('contacts', 'contacts', client=client)
+        self.assertFalse(stream.check_access())
 
     def test_returns_false_on_unauthorized_error(self):
         """A 401 UnauthorizedError returns False without re-raising."""
         client = _make_client(side_effect=ActiveCampaignUnauthorizedError('401 Unauthorized'))
-        result = check_stream_access(client, 'contacts', 'contacts')
-        self.assertFalse(result)
+        stream = _make_stream_instance('contacts', 'contacts', client=client)
+        self.assertFalse(stream.check_access())
 
     def test_reraises_unexpected_exception(self):
-        """Any other exception is re-raised to the caller."""
-        client = _make_client(side_effect=RuntimeError('unexpected'))
+        """Non-auth exceptions are re-raised to the caller."""
+        client = _make_client(side_effect=RuntimeError('network failure'))
+        stream = _make_stream_instance('contacts', 'contacts', client=client)
         with self.assertRaises(RuntimeError):
-            check_stream_access(client, 'contacts', 'contacts')
+            stream.check_access()
+
+    def test_warning_logged_on_forbidden(self):
+        """A WARNING is emitted containing the stream name when access is denied."""
+        client = _make_client(side_effect=ActiveCampaignForbiddenError('403'))
+        stream = _make_stream_instance('contacts', 'contacts', client=client)
+        with patch('tap_activecampaign.streams.LOGGER') as mock_logger:
+            stream.check_access()
+            mock_logger.warning.assert_called_once()
+            self.assertIn('contacts', mock_logger.warning.call_args[0][1])
 
 
 # ---------------------------------------------------------------------------
-# TestGetAccessibleStreams
+# TestPruneInaccessibleChildren
 # ---------------------------------------------------------------------------
 
-# Minimal schema fixture: two parent streams + one child stream
-SCHEMAS = {
-    'stream_a': {'type': 'object', 'properties': {}},
-    'stream_b': {'type': 'object', 'properties': {}},
-    'child_of_a': {'type': 'object', 'properties': {}},
-}
-
-FLAT_STREAMS = {
-    'stream_a':   {'key_properties': ['id'], 'parent_tap_stream_id': None},
-    'stream_b':   {'key_properties': ['id'], 'parent_tap_stream_id': None},
-    'child_of_a': {'key_properties': ['id'], 'parent_tap_stream_id': 'stream_a'},
-}
-
-MOCK_STREAMS = {
-    'stream_a':   _make_stream_cls('path/a'),
-    'stream_b':   _make_stream_cls('path/b'),
-    'child_of_a': _make_stream_cls('path/a/{}/child'),
+_MOCK_STREAMS_PRUNE = {
+    'parent_a': _make_stream_cls(parent=None),
+    'parent_b': _make_stream_cls(parent=None),
+    'child_of_a': _make_stream_cls(parent='parent_a'),
+    'child_of_b': _make_stream_cls(parent='parent_b'),
 }
 
 
-@patch('tap_activecampaign.discover.STREAMS', MOCK_STREAMS)
-class TestGetAccessibleStreams(unittest.TestCase):
-    """Unit tests for _get_accessible_streams()."""
+@patch('tap_activecampaign.discover.STREAMS', _MOCK_STREAMS_PRUNE)
+class TestPruneInaccessibleChildren(unittest.TestCase):
+    """Unit tests for _prune_inaccessible_children(schemas, field_metadata)."""
 
-    def test_all_parent_streams_accessible(self):
-        """Returns all schemas (including child) when all parent streams are accessible."""
-        client = _make_client(return_value={})
-        result = _get_accessible_streams(client, SCHEMAS, FLAT_STREAMS)
-        self.assertEqual(set(result.keys()), {'stream_a', 'stream_b', 'child_of_a'})
+    def test_child_included_when_parent_accessible(self):
+        """Child stays in schemas when its parent is still present."""
+        schemas = {'parent_a': {}, 'parent_b': {}, 'child_of_a': {}, 'child_of_b': {}}
+        field_metadata = {'parent_a': [], 'parent_b': [], 'child_of_a': [], 'child_of_b': []}
+        _prune_inaccessible_children(schemas, field_metadata)
+        self.assertIn('child_of_a', schemas)
+        self.assertIn('child_of_b', schemas)
 
-    def test_child_stream_not_probed(self):
-        """Child streams are skipped during probing (their path requires a parent id)."""
-        client = _make_client(return_value={})
-        _get_accessible_streams(client, SCHEMAS, FLAT_STREAMS)
-        probe_paths = [c.kwargs.get('path') or c.args[0] for c in client.get.call_args_list]
-        self.assertNotIn('path/a/{}/child', probe_paths)
+    def test_child_excluded_when_parent_already_popped(self):
+        """Child is popped from schemas and field_metadata when its parent is absent."""
+        # Simulate parent_a already removed by _apply_access_checks
+        schemas = {'parent_b': {}, 'child_of_a': {}, 'child_of_b': {}}
+        field_metadata = {'parent_b': [], 'child_of_a': [], 'child_of_b': []}
+        _prune_inaccessible_children(schemas, field_metadata)
+        self.assertNotIn('child_of_a', schemas)
+        self.assertNotIn('child_of_a', field_metadata)
+        self.assertIn('child_of_b', schemas)
 
-    def test_inaccessible_parent_excluded_from_catalog(self):
-        """An inaccessible parent stream is removed from the returned schemas."""
-        def selective_forbidden(path, **kwargs):
-            if path == 'path/b':
-                raise ActiveCampaignForbiddenError('403')
-            return {}
-        client = _make_client(side_effect=selective_forbidden)
-        result = _get_accessible_streams(client, SCHEMAS, FLAT_STREAMS)
-        self.assertNotIn('stream_b', result)
-        self.assertIn('stream_a', result)
+    def test_warning_logged_for_excluded_child(self):
+        """A WARNING names both the excluded child and the inaccessible parent."""
+        schemas = {'parent_b': {}, 'child_of_a': {}, 'child_of_b': {}}
+        field_metadata = {'parent_b': [], 'child_of_a': [], 'child_of_b': []}
+        with patch('tap_activecampaign.discover.LOGGER') as mock_logger:
+            _prune_inaccessible_children(schemas, field_metadata)
+            mock_logger.warning.assert_called_once()
+            args = mock_logger.warning.call_args[0]
+            self.assertIn('child_of_a', args[1])
+            self.assertIn('parent_a', args[2])
+
+    def test_no_warning_when_all_parents_accessible(self):
+        """No WARNING is emitted when every parent is present in schemas."""
+        schemas = {'parent_a': {}, 'parent_b': {}, 'child_of_a': {}, 'child_of_b': {}}
+        field_metadata = {'parent_a': [], 'parent_b': [], 'child_of_a': [], 'child_of_b': []}
+        with patch('tap_activecampaign.discover.LOGGER') as mock_logger:
+            _prune_inaccessible_children(schemas, field_metadata)
+            mock_logger.warning.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestApplyAccessChecks
+# ---------------------------------------------------------------------------
+
+_MOCK_STREAMS_APPLY = {
+    'stream_a': _make_stream_cls(parent=None, accessible=True),
+    'stream_b': _make_stream_cls(parent=None, accessible=True),
+}
+
+
+@patch('tap_activecampaign.discover.STREAMS', _MOCK_STREAMS_APPLY)
+class TestApplyAccessChecks(unittest.TestCase):
+    """Unit tests for _apply_access_checks(client, schemas, field_metadata)."""
+
+    def _schemas_and_meta(self, names):
+        return {n: {} for n in names}, {n: [] for n in names}
+
+    def test_accessible_streams_remain_in_schemas(self):
+        """All streams stay in schemas when all return check_access() == True."""
+        schemas, field_metadata = self._schemas_and_meta(['stream_a', 'stream_b'])
+        _apply_access_checks(_make_client(), schemas, field_metadata)
+        self.assertIn('stream_a', schemas)
+        self.assertIn('stream_b', schemas)
+
+    def test_inaccessible_stream_popped_from_schemas(self):
+        """Inaccessible stream is removed from both schemas and field_metadata."""
+        mock_streams = {
+            'stream_a': _make_stream_cls(parent=None, accessible=False),
+            'stream_b': _make_stream_cls(parent=None, accessible=True),
+        }
+        schemas, field_metadata = self._schemas_and_meta(['stream_a', 'stream_b'])
+        with patch('tap_activecampaign.discover.STREAMS', mock_streams):
+            _apply_access_checks(_make_client(), schemas, field_metadata)
+        self.assertNotIn('stream_a', schemas)
+        self.assertNotIn('stream_a', field_metadata)
+        self.assertIn('stream_b', schemas)
+
+    def test_all_inaccessible_raises_forbidden(self):
+        """Raises ActiveCampaignDiscoveryForbiddenError when all parent streams are inaccessible."""
+        mock_streams = {
+            'stream_a': _make_stream_cls(parent=None, accessible=False),
+            'stream_b': _make_stream_cls(parent=None, accessible=False),
+        }
+        schemas, field_metadata = self._schemas_and_meta(['stream_a', 'stream_b'])
+        with patch('tap_activecampaign.discover.STREAMS', mock_streams):
+            with self.assertRaises(ActiveCampaignDiscoveryForbiddenError):
+                _apply_access_checks(_make_client(), schemas, field_metadata)
 
     def test_child_excluded_when_parent_inaccessible(self):
-        """Child stream is excluded when its parent is inaccessible."""
-        def block_stream_a(path, **kwargs):
-            if path == 'path/a':
-                raise ActiveCampaignForbiddenError('403')
-            return {}
-        client = _make_client(side_effect=block_stream_a)
-        result = _get_accessible_streams(client, SCHEMAS, FLAT_STREAMS)
-        self.assertNotIn('stream_a', result)
-        self.assertNotIn('child_of_a', result)
-        self.assertIn('stream_b', result)
-
-    def test_warning_logged_for_inaccessible_streams(self):
-        """A warning is logged listing the inaccessible streams."""
-        schemas_two = {'stream_a': SCHEMAS['stream_a'], 'stream_b': SCHEMAS['stream_b']}
-        flat_two = {'stream_a': FLAT_STREAMS['stream_a'], 'stream_b': FLAT_STREAMS['stream_b']}
-
-        def block_a_only(path, **kwargs):
-            if path == 'path/a':
-                raise ActiveCampaignForbiddenError('403')
-            return {}
-
-        client = _make_client(side_effect=block_a_only)
-        with patch('tap_activecampaign.discover.LOGGER') as mock_logger:
-            _get_accessible_streams(client, schemas_two, flat_two)
-            warning_call = mock_logger.warning.call_args
-            self.assertIn('stream_a', warning_call[0][1])
-
-    def test_raises_when_all_streams_inaccessible(self):
-        """Raises ActiveCampaignDiscoveryForbiddenError when no streams are accessible."""
-        client = _make_client(side_effect=ActiveCampaignForbiddenError('403'))
-        # Only parent streams in schemas (no children that could survive)
-        schemas_parents = {
-            'stream_a': SCHEMAS['stream_a'],
-            'stream_b': SCHEMAS['stream_b'],
+        """Child stream is pruned from schemas when its parent is inaccessible."""
+        mock_streams = {
+            'stream_a': _make_stream_cls(parent=None, accessible=False),
+            'stream_b': _make_stream_cls(parent=None, accessible=True),
+            'child_of_a': _make_stream_cls(parent='stream_a', accessible=True),
         }
-        flat_parents = {
-            'stream_a': FLAT_STREAMS['stream_a'],
-            'stream_b': FLAT_STREAMS['stream_b'],
+        schemas = {'stream_a': {}, 'stream_b': {}, 'child_of_a': {}}
+        field_metadata = {'stream_a': [], 'stream_b': [], 'child_of_a': []}
+        with patch('tap_activecampaign.discover.STREAMS', mock_streams):
+            _apply_access_checks(_make_client(), schemas, field_metadata)
+        self.assertNotIn('stream_a', schemas)
+        self.assertNotIn('child_of_a', schemas)
+        self.assertIn('stream_b', schemas)
+
+    def test_schemas_mutated_in_place(self):
+        """Return value is None; the same dict object is mutated (not replaced)."""
+        mock_streams = {
+            'stream_a': _make_stream_cls(parent=None, accessible=False),
+            'stream_b': _make_stream_cls(parent=None, accessible=True),
         }
-        with self.assertRaises(ActiveCampaignDiscoveryForbiddenError):
-            _get_accessible_streams(client, schemas_parents, flat_parents)
+        schemas, field_metadata = self._schemas_and_meta(['stream_a', 'stream_b'])
+        original_id = id(schemas)
+        with patch('tap_activecampaign.discover.STREAMS', mock_streams):
+            result = _apply_access_checks(_make_client(), schemas, field_metadata)
+        self.assertIsNone(result)
+        self.assertEqual(id(schemas), original_id)
+        self.assertNotIn('stream_a', schemas)
+        self.assertIn('stream_b', schemas)
+
+    def test_warning_logged_for_inaccessible_stream(self):
+        """A WARNING listing inaccessible streams is emitted when some are excluded."""
+        mock_streams = {
+            'stream_a': _make_stream_cls(parent=None, accessible=False),
+            'stream_b': _make_stream_cls(parent=None, accessible=True),
+        }
+        schemas, field_metadata = self._schemas_and_meta(['stream_a', 'stream_b'])
+        with patch('tap_activecampaign.discover.STREAMS', mock_streams):
+            with patch('tap_activecampaign.discover.LOGGER') as mock_logger:
+                _apply_access_checks(_make_client(), schemas, field_metadata)
+                warning_messages = [str(c) for c in mock_logger.warning.call_args_list]
+                self.assertTrue(any('stream_a' in m for m in warning_messages))
 
 
 # ---------------------------------------------------------------------------
 # TestDiscover
 # ---------------------------------------------------------------------------
 
-# Minimal schema returned by get_schemas() for discover() tests
 _MINIMAL_SCHEMA_DICT = {'type': 'object', 'properties': {'id': {'type': 'integer'}}}
-_MINIMAL_SCHEMAS = {'contacts': _MINIMAL_SCHEMA_DICT}
-_MINIMAL_FIELD_METADATA = {'contacts': []}
 _MINIMAL_FLAT_STREAMS = {'contacts': {'key_properties': ['id'], 'parent_tap_stream_id': None}}
 
 
@@ -177,34 +264,47 @@ class TestDiscover(unittest.TestCase):
 
     @patch('tap_activecampaign.discover.flatten_streams', return_value=_MINIMAL_FLAT_STREAMS)
     @patch('tap_activecampaign.discover.get_schemas',
-           return_value=(_MINIMAL_SCHEMAS, _MINIMAL_FIELD_METADATA))
-    def test_discover_with_client_calls_get_accessible_streams(self, mock_schemas, mock_flat):
-        """When a client is provided, _get_accessible_streams is called."""
-        client = _make_client()
-        with patch('tap_activecampaign.discover._get_accessible_streams',
-                   return_value=_MINIMAL_SCHEMAS) as mock_access:
-            discover(client=client)
-            mock_access.assert_called_once_with(client, _MINIMAL_SCHEMAS, _MINIMAL_FLAT_STREAMS)
-
-    @patch('tap_activecampaign.discover.STREAMS',
-           {'contacts': _make_stream_cls('contacts')})
-    @patch('tap_activecampaign.discover.flatten_streams', return_value=_MINIMAL_FLAT_STREAMS)
-    @patch('tap_activecampaign.discover.get_schemas',
-           return_value=(_MINIMAL_SCHEMAS, _MINIMAL_FIELD_METADATA))
-    def test_discover_with_client_accessible_stream_in_catalog(self, mock_schemas, mock_flat):
-        """Accessible stream appears in catalog when client is provided."""
-        client = _make_client(return_value={})
-        catalog = discover(client=client)
+           return_value=({'contacts': _MINIMAL_SCHEMA_DICT}, {'contacts': []}))
+    @patch('tap_activecampaign.discover._apply_access_checks')
+    def test_accessible_stream_appears_in_catalog(self, mock_access, mock_schemas, mock_flat):
+        """Stream not popped by _apply_access_checks appears in catalog."""
+        # _apply_access_checks is a no-op: schemas unchanged
+        catalog = discover(client=_make_client())
         stream_ids = [s.tap_stream_id for s in catalog.streams]
         self.assertIn('contacts', stream_ids)
 
-    @patch('tap_activecampaign.discover.STREAMS',
-           {'contacts': _make_stream_cls('contacts')})
     @patch('tap_activecampaign.discover.flatten_streams', return_value=_MINIMAL_FLAT_STREAMS)
     @patch('tap_activecampaign.discover.get_schemas',
-           return_value=(_MINIMAL_SCHEMAS, _MINIMAL_FIELD_METADATA))
-    def test_discover_with_client_inaccessible_stream_raises(self, mock_schemas, mock_flat):
-        """Raises ActiveCampaignDiscoveryForbiddenError when the only stream is inaccessible."""
-        client = _make_client(side_effect=ActiveCampaignForbiddenError('403'))
-        with self.assertRaises(ActiveCampaignDiscoveryForbiddenError):
+           return_value=({'contacts': _MINIMAL_SCHEMA_DICT}, {'contacts': []}))
+    def test_inaccessible_stream_excluded_from_catalog(self, mock_schemas, mock_flat):
+        """Stream popped by _apply_access_checks is excluded from catalog."""
+        def pop_contacts(client, schemas, field_metadata):
+            schemas.pop('contacts', None)
+            field_metadata.pop('contacts', None)
+        with patch('tap_activecampaign.discover._apply_access_checks', side_effect=pop_contacts):
+            catalog = discover(client=_make_client())
+        stream_ids = [s.tap_stream_id for s in catalog.streams]
+        self.assertNotIn('contacts', stream_ids)
+
+    @patch('tap_activecampaign.discover.flatten_streams', return_value=_MINIMAL_FLAT_STREAMS)
+    @patch('tap_activecampaign.discover.get_schemas',
+           return_value=({'contacts': _MINIMAL_SCHEMA_DICT}, {'contacts': []}))
+    def test_all_inaccessible_raises(self, mock_schemas, mock_flat):
+        """Raises ActiveCampaignDiscoveryForbiddenError propagated from _apply_access_checks."""
+        with patch('tap_activecampaign.discover._apply_access_checks',
+                   side_effect=ActiveCampaignDiscoveryForbiddenError('no access')):
+            with self.assertRaises(ActiveCampaignDiscoveryForbiddenError):
+                discover(client=_make_client())
+
+    @patch('tap_activecampaign.discover.flatten_streams', return_value=_MINIMAL_FLAT_STREAMS)
+    @patch('tap_activecampaign.discover.get_schemas',
+           return_value=({'contacts': _MINIMAL_SCHEMA_DICT}, {'contacts': []}))
+    def test_apply_access_checks_called_with_client_schemas_and_metadata(self, mock_schemas, mock_flat):
+        """discover() calls _apply_access_checks(client, schemas, field_metadata)."""
+        client = _make_client()
+        with patch('tap_activecampaign.discover._apply_access_checks') as mock_access:
             discover(client=client)
+            args = mock_access.call_args[0]
+            self.assertIs(args[0], client)
+            self.assertIsInstance(args[1], dict)
+            self.assertIsInstance(args[2], dict)
