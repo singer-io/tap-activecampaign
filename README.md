@@ -23,7 +23,7 @@ This tap:
   - [contact_custom_fields](https://developers.activecampaign.com/reference/retrieve-fields)
   - [contact_custom_field_options](https://developers.activecampaign.com/reference/retrieve-fields)
   - [contact_custom_field_rels](https://developers.activecampaign.com/reference/retrieve-fields)
-  - [contact_custom_field_values](https://developers.activecampaign.com/reference/retrieve-fields)
+  - [contact_custom_field_values](https://developers.activecampaign.com/reference/list-all-contacts)
   - [contact_deals](https://developers.activecampaign.com/reference/list-all-secondary-contacts)
   - [deals](https://developers.activecampaign.com/reference/list-all-deals)
   - [deal_stages](https://developers.activecampaign.com/reference/list-all-deal-stages)
@@ -157,12 +157,13 @@ This tap:
 - Replication strategy: Full Table
 - Transformations: camelCase to snake_case, remove links node
 
-[contact_custom_field_values](https://developers.activecampaign.com/reference/retrieve-fields)
-- Endpoint: https://{subdomain}.api-us1.com/fieldValues
-- Data key: fieldValues
+[contact_custom_field_values](https://developers.activecampaign.com/reference/list-all-contacts)
+- Endpoint: https://{subdomain}.api-us1.com/contacts?include=fieldValues&filters[updated_after]={bookmark}
+- Data key: fieldValues (embedded in contacts response)
 - Primary keys: id
-- Replication strategy: Incremental (query all, filter results)
-  - Bookmark: udate
+- Replication strategy: Incremental (contacts filtered by updated_after, field values extracted from response)
+  - Bookmark: max contact udate across returned contacts
+  - Bookmark query field: filters[updated_after]
 - Transformations: camelCase to snake_case, remove links node
 
 [contact_deals](https://developers.activecampaign.com/reference/list-all-secondary-contacts)

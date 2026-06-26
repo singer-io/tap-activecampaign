@@ -946,14 +946,72 @@ class ContactCustomFieldRels(ActiveCampaign):
 
 class ContactCustomFieldValues(ActiveCampaign):
     """
-    Get data for contact_custom_field_values.
-    Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values-1
+    Get data for contact_custom_field_values incrementally via the contacts endpoint.
+    Contacts updated after the bookmark are fetched with their embedded fieldValues,
+    avoiding a full refresh of all field values on every run.
+    Reference : https://developers.activecampaign.com/reference/list-all-contacts
     """
     stream_name = 'contact_custom_field_values'
     replication_keys = ['udate']
-    path = 'fieldValues'
+    path = 'contacts'
     data_key = 'fieldValues'
     created_timestamp = 'cdate'
+    params = {'include': 'fieldValues'}
+
+    def sync(self, client, catalog, state, start_date, path, selected_streams=None, parent=None, parent_id=None, **kwargs):
+        last_datetime = self.get_bookmark(state, self.stream_name, start_date)
+        # Bookmark tracks max contact udate, not field value udate.
+        # A contact can be updated for non-field-value reasons (e.g. email change),
+        # which would leave field value udate unchanged and cause an infinite re-fetch
+        # if we used field value udate as the bookmark.
+        max_contact_udate = last_datetime
+        offset = 0
+        limit = 100
+        total_records = 0
+        endpoint_total = 0
+
+        LOGGER.info('stream: {}, last_datetime: {}'.format(self.stream_name, last_datetime))
+
+        while offset <= total_records:
+            params = {
+                'offset': offset,
+                'limit': limit,
+                'include': 'fieldValues',
+                'filters[updated_after]': last_datetime,
+            }
+            querystring = '&'.join(['%s=%s' % (k, v) for k, v in params.items()])
+            LOGGER.info('URL for Stream {}: {}{}?{}'.format(
+                self.stream_name, self.client.base_url, path, querystring))
+
+            data = self.client.get(path=path, params=querystring, endpoint=self.stream_name)
+            if not data:
+                break
+
+            time_extracted = utils.now()
+
+            for contact in data.get('contacts', []):
+                udate = contact.get('udate', '')
+                if udate and udate > max_contact_udate:
+                    max_contact_udate = udate
+
+            field_values = self.transform_data(data)
+            if field_values:
+                _, record_count = self.process_records(
+                    catalog=catalog,
+                    stream_name=self.stream_name,
+                    records=field_values,
+                    time_extracted=time_extracted,
+                    bookmark_field=None,
+                    max_bookmark_value=None,
+                    last_datetime=last_datetime,
+                )
+                endpoint_total += record_count
+
+            total_records = int(data.get('meta', {}).get('total') or 0)
+            offset += limit
+
+        self.write_bookmark(state, self.stream_name, max_contact_udate)
+        return endpoint_total
 
 class ContactDeals(ActiveCampaign):
     """
