@@ -377,9 +377,8 @@ class ActiveCampaignTest(unittest.TestCase):
             },
             'email_activities': {
                 self.PRIMARY_KEYS: {'id'},
-                self.REPLICATION_METHOD: self.INCREMENTAL,
-                self.REPLICATION_KEYS: {'tstamp'},
-                self.OBEYS_START_DATE: True
+                self.REPLICATION_METHOD: self.FULL_TABLE,
+                self.OBEYS_START_DATE: False
             },
             'goals': {
                 self.PRIMARY_KEYS: {'id'},
