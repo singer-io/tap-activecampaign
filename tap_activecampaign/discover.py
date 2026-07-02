@@ -7,11 +7,13 @@ from tap_activecampaign.exceptions import ActiveCampaignDiscoveryForbiddenError
 LOGGER = singer.get_logger()
 
 
-def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> None:
+def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> list:
     """
     Remove child streams from the catalog whose parent stream was excluded.
     Mutates schemas and field_metadata in place.
+    Returns the list of pruned child stream names.
     """
+    pruned = []
     for name, stream_cls in list(STREAMS.items()):
         if name in schemas and stream_cls.parent and stream_cls.parent not in schemas:
             LOGGER.warning(
@@ -20,6 +22,8 @@ def _prune_inaccessible_children(schemas: dict, field_metadata: dict) -> None:
             )
             schemas.pop(name)
             field_metadata.pop(name)
+            pruned.append(name)
+    return pruned
 
 
 def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
@@ -39,7 +43,7 @@ def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
         schemas.pop(stream_name, None)
         field_metadata.pop(stream_name, None)
 
-    _prune_inaccessible_children(schemas, field_metadata)
+    pruned_children = _prune_inaccessible_children(schemas, field_metadata)
 
     if inaccessible_streams:
         total_parent_streams = len([s for s in STREAMS.values() if not s.parent])
@@ -47,9 +51,10 @@ def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
             raise ActiveCampaignDiscoveryForbiddenError(
                 "HTTP-error-code: 403, Error: The credentials do not have 'read' access to any supported streams."
             )
+        all_excluded = inaccessible_streams + pruned_children
         LOGGER.warning(
             "Unauthorized streams have been excluded: %s",
-            ", ".join(inaccessible_streams),
+            ", ".join(all_excluded),
         )
 
 
