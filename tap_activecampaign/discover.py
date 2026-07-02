@@ -48,7 +48,7 @@ def _apply_access_checks(client, schemas: dict, field_metadata: dict) -> None:
                 "HTTP-error-code: 403, Error: The credentials do not have 'read' access to any supported streams."
             )
         LOGGER.warning(
-            "No 'read' access to stream(s): '%s'. Excluded from catalog.",
+            "Unauthorized streams have been excluded: %s",
             ", ".join(inaccessible_streams),
         )
 
