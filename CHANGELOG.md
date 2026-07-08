@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.0
+  * Exclude streams with unauthorized access from catalog during discovery [#55](https://github.com/singer-io/tap-activecampaign/pull/55)
+  * Upgrade backoff lib version to 2.2.1, requests to 2.34.2, singer-python to 6.8.0
+
 ## 1.4.0
   * Replace base url with /users/me for token validation [#53](https://github.com/singer-io/tap-activecampaign/pull/53)
   * Bump requests from 2.32.4 to 2.33.0 [#54](https://github.com/singer-io/tap-activecampaign/pull/54)

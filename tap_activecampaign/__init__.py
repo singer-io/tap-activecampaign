@@ -1,8 +1,6 @@
 import sys
 import json
-import argparse
 import singer
-from singer import metadata, utils
 from tap_activecampaign.client import ActiveCampaignClient
 from tap_activecampaign.discover import discover
 from tap_activecampaign.sync import sync
@@ -16,10 +14,10 @@ REQUIRED_CONFIG_KEYS = [
     'user_agent'
 ]
 
-def do_discover():
+def do_discover(client):
 
     LOGGER.info('Starting discover')
-    catalog = discover()
+    catalog = discover(client)
     json.dump(catalog.to_dict(), sys.stdout, indent=2)
     LOGGER.info('Finished discover')
 
@@ -39,7 +37,7 @@ def main():
             state = parsed_args.state
 
         if parsed_args.discover:
-            do_discover()
+            do_discover(client)
         elif parsed_args.catalog:
             sync(client=client,
                  config=parsed_args.config,
