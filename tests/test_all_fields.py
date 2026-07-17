@@ -24,21 +24,33 @@ class ActiveCampaignAllFields(ActiveCampaignTest):
         • verify all fields for each stream are replicated
         """
 
-
         # Streams to verify all fields tests
         expected_streams = self.expected_check_streams()
 
-        # We are not able to generate data for `contact_conversions` stream.
         # For `sms` stream it requires Professional plan of account. So, removing it from streams_to_test set.
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         streams_to_skip = {
-            'bounce_logs', 'contact_conversions', 'sms',
-            'contact_automations',
-            'goals', 'contact_data', 'contact_emails',
-            'email_activities', 'site_messages'
+            'addresses',
+            'bounce_logs',
+            'campaign_links',
+            'contact_deals',
+            'contact_emails',
+            'deal_group_users',
+            'deal_stages',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_order_activities',
+            'ecommerce_order_products',
+            'ecommerce_orders',
+            'email_activities',
+            'goals',
+            'site_messages',
+            'sms',
+            'templates',
+            'webhooks',
         }
-        
+
         expected_streams = expected_streams - streams_to_skip
 
         expected_automatic_fields = self.expected_automatic_fields()

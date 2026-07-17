@@ -3,6 +3,7 @@ from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
 from tap_activecampaign.transform import transform_json
 from tap_activecampaign.client import ActiveCampaignClient
+from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
 
 LOGGER = singer.get_logger()
 # streams: API URL endpoints to be called
@@ -43,8 +44,28 @@ class ActiveCampaign:
     def __init__(self, client: ActiveCampaignClient = None):
         self.client = client
 
+    def check_access(self) -> bool:
+        """
+        Verify that the API credentials have read access to this stream.
+        Returns True if accessible, False if a 403 or 401 response is received.
+        Child streams always return True — access is governed by the parent stream check.
+        """
+        if self.parent:
+            return True
+
+        try:
+            self.client.get(path=self.path, params={'limit': 1}, endpoint=self.stream_name)
+            return True
+        except (ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError) as exc:
+            LOGGER.warning(
+                "Unauthorized Stream: %s, excluding from catalog. HTTP-Error-Message:'%s'",
+                self.stream_name,
+                str(exc),
+            )
+            return False
+
     def write_schema(self, catalog, stream_name):
-        """ 
+        """
         Write a schema message.
         """
         stream = catalog.get_stream(stream_name)
@@ -59,7 +80,7 @@ class ActiveCampaign:
         except OSError as err:
             LOGGER.error('OS Error while writing schema for: {}'.format(stream_name))
             raise err
-        
+
     def write_record(self, stream_name, record, time_extracted):
         """
         Write a single record for the given stream.
@@ -77,7 +98,7 @@ class ActiveCampaign:
             raise err
 
     def get_bookmark(self, state, stream, default):
-        """ 
+        """
         Return bookmark value present in state or return a default value if no bookmark
         present in the state for provided stream
         """
@@ -249,7 +270,7 @@ class ActiveCampaign:
         Transform data with transform_json from transform.py
         """
         data_key = self.data_key
-        
+
         # The data_key identifies the array/list of records below the <root> element
         transformed_data = [] # initialize the record list
         data_list = []
@@ -270,7 +291,7 @@ class ActiveCampaign:
                 data_list.append(data)
                 data_dict[data_key] = data_list
                 transformed_data = transform_json(data_dict, self.stream_name, data_key)
-        
+
         return transformed_data
 
     def sync_child_stream(self, children, transformed_data, catalog, state, start_date, selected_streams):
@@ -278,7 +299,7 @@ class ActiveCampaign:
         sync the child stream. Loop through all children and if it is selected then collect data based on parent_id.
         """
         id_fields = self.key_properties
-        
+
         for child_stream_name in children:
             if child_stream_name in selected_streams:
                 LOGGER.info('START Syncing: {}'.format(child_stream_name))
@@ -324,11 +345,11 @@ class ActiveCampaign:
 
     def get_and_transform_records(self, querystring, path, max_bookmark_value, state, catalog, start_date, last_datetime, endpoint_total, 
                                   limit, total_records, record_count, page, offset, parent, parent_id, selected_streams):
-        
+
         """
         Get the records using the client get request and transform it using transform_records
         """
-        
+
         bookmark_field = next(iter(self.replication_keys or []), None)
         created_timestamp_field = self.created_timestamp
         id_fields = self.key_properties
@@ -339,15 +360,15 @@ class ActiveCampaign:
             path=path,
             params=querystring,
             endpoint=self.stream_name)
-        
+
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
-        
+
         if not data or data is None or data == {}:
             LOGGER.info('No data for URL {}{}{}'.format(self.client.base_url, path, querystring)) # No data results
         else: # has data
             transformed_data = self.transform_data(data)
-            
+
             if not transformed_data or transformed_data is None:
                 LOGGER.info('No transformed data for data = {}'.format(data)) # No data results
 
@@ -368,7 +389,7 @@ class ActiveCampaign:
                             self.stream_name, key, record))
                         raise RuntimeError
                 i = i + 1
-        
+
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
                 catalog=catalog,
@@ -421,7 +442,7 @@ class ActiveCampaign:
 
 class Accounts(ActiveCampaign):
     """
-    Get data for accounts. 
+    Get data for accounts.
     Reference : https://developers.activecampaign.com/reference#list-all-accounts
     """
     stream_name = 'accounts'
@@ -432,7 +453,7 @@ class Accounts(ActiveCampaign):
 
 class AccountContact(ActiveCampaign):
     """
-    Get data for account contact. 
+    Get data for account contact.
     Reference : https://developers.activecampaign.com/reference#list-all-associations-1
     """
     stream_name = 'account_contacts'
@@ -443,7 +464,7 @@ class AccountContact(ActiveCampaign):
 
 class AccountCustomFields(ActiveCampaign):
     """
-    Get data for account custom fields. 
+    Get data for account custom fields.
     Reference : https://developers.activecampaign.com/reference#list-all-custom-fields
     """
     stream_name = 'account_custom_fields'
@@ -454,7 +475,7 @@ class AccountCustomFields(ActiveCampaign):
 
 class AccountCustomFieldValues(ActiveCampaign):
     """
-    Get data for account custom field values. 
+    Get data for account custom field values.
     Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values-2
     """
     stream_name = 'account_custom_field_values'
@@ -465,7 +486,7 @@ class AccountCustomFieldValues(ActiveCampaign):
 
 class Addresses(ActiveCampaign):
     """
-    Get data for addresses. 
+    Get data for addresses.
     Reference : https://developers.activecampaign.com/reference#list-all-addresses
     """
     stream_name = 'addresses'
@@ -476,7 +497,7 @@ class Addresses(ActiveCampaign):
 
 class Automations(ActiveCampaign):
     """
-    Get data for automations. 
+    Get data for automations.
     Reference : https://developers.activecampaign.com/reference#list-all-automations
     """
     stream_name = 'automations'
@@ -488,7 +509,7 @@ class Automations(ActiveCampaign):
 
 class Brandings(ActiveCampaign):
     """
-    Get data for brandings. 
+    Get data for brandings.
     Reference : https://developers.activecampaign.com/reference#brandings
     """
     stream_name = 'brandings'
@@ -498,7 +519,7 @@ class Brandings(ActiveCampaign):
 
 class Calendars(ActiveCampaign):
     """
-    Get data for calendars. 
+    Get data for calendars.
     Reference : https://developers.activecampaign.com/reference#list-all-calendar-feeds
     """
     stream_name = 'calendars'
@@ -510,7 +531,7 @@ class Calendars(ActiveCampaign):
 
 class Campaigns(ActiveCampaign):
     """
-    Get data for campaigns. 
+    Get data for campaigns.
     Reference : https://developers.activecampaign.com/reference#list-all-campaigns
     """
     stream_name = 'campaigns'
@@ -521,7 +542,7 @@ class Campaigns(ActiveCampaign):
 
 class CampaignLinks(ActiveCampaign):
     """
-    Get data for campaign_links. 
+    Get data for campaign_links.
     Reference : https://developers.activecampaign.com/reference#retrieve-links-associated-campaign
     """
     stream_name = 'campaign_links'
@@ -547,7 +568,7 @@ class Contacts(ActiveCampaign):
 
 class ContactAutomations(ActiveCampaign):
     """
-    Get data for contactAutomations. 
+    Get data for contactAutomations.
     Reference : https://developers.activecampaign.com/reference#list-all-contact-automations
     """
     stream_name = 'contact_automations'
@@ -558,7 +579,7 @@ class ContactAutomations(ActiveCampaign):
 
 class ContactCustomFields(ActiveCampaign):
     """
-    Get data for contact_custom_fields. 
+    Get data for contact_custom_fields.
     Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
     """
     stream_name = 'contact_custom_fields'
@@ -568,7 +589,7 @@ class ContactCustomFields(ActiveCampaign):
 
 class ContactCustomFieldOptions(ActiveCampaign):
     """
-    Get data for contact_custom_field_options. 
+    Get data for contact_custom_field_options.
     Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
     """
     stream_name = 'contact_custom_field_options'
@@ -578,7 +599,7 @@ class ContactCustomFieldOptions(ActiveCampaign):
 
 class ContactCustomFieldRels(ActiveCampaign):
     """
-    Get data for contact_custom_field_rels. 
+    Get data for contact_custom_field_rels.
     Reference : https://developers.activecampaign.com/reference#retrieve-fields-1
     """
     stream_name = 'contact_custom_field_rels'
@@ -588,7 +609,7 @@ class ContactCustomFieldRels(ActiveCampaign):
 
 class ContactCustomFieldValues(ActiveCampaign):
     """
-    Get data for contact_custom_field_values. 
+    Get data for contact_custom_field_values.
     Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values-1
     """
     stream_name = 'contact_custom_field_values'
@@ -599,7 +620,7 @@ class ContactCustomFieldValues(ActiveCampaign):
 
 class ContactDeals(ActiveCampaign):
     """
-    Get data for contact_deals. 
+    Get data for contact_deals.
     Reference : https://developers.activecampaign.com/reference#list-all-secondary-contacts
     """
     stream_name = 'contact_deals'
@@ -610,7 +631,7 @@ class ContactDeals(ActiveCampaign):
 
 class DealStages(ActiveCampaign):
     """
-    Get data for deal_stages. 
+    Get data for deal_stages.
     Reference : https://developers.activecampaign.com/reference#list-all-deal-stages
     """
     stream_name = 'deal_stages'
@@ -618,10 +639,10 @@ class DealStages(ActiveCampaign):
     path = 'dealStages'
     data_key = 'dealStages'
     created_timestamp = 'cdate'
-    
+
 class DealGroups(ActiveCampaign):
     """
-    Get data for deal_groups. 
+    Get data for deal_groups.
     Reference : https://developers.activecampaign.com/reference#list-all-pipelines
     Also known as: pipelines
     """
@@ -634,7 +655,7 @@ class DealGroups(ActiveCampaign):
 
 class DealCustomFields(ActiveCampaign):
     """
-    Get data for deal_custom_fields. 
+    Get data for deal_custom_fields.
     Reference : https://developers.activecampaign.com/reference#retrieve-all-dealcustomfielddata-resources
     """
     stream_name = 'deal_custom_fields'
@@ -645,7 +666,7 @@ class DealCustomFields(ActiveCampaign):
 
 class DealCustomFieldValues(ActiveCampaign):
     """
-    Get data for deal_custom_field_values. 
+    Get data for deal_custom_field_values.
     Reference : https://developers.activecampaign.com/reference#list-all-custom-field-values
     """
     stream_name = 'deal_custom_field_values'
@@ -653,10 +674,10 @@ class DealCustomFieldValues(ActiveCampaign):
     path = 'dealCustomFieldData'
     data_key = 'dealCustomFieldData'
     created_timestamp = 'created_timestamp'
-    
+
 class Deals(ActiveCampaign):
     """
-    Get data for deals. 
+    Get data for deals.
     Reference : https://developers.activecampaign.com/reference#list-all-deals
     """
     stream_name = 'deals'
@@ -667,19 +688,19 @@ class Deals(ActiveCampaign):
 
 class EcommerceConnections(ActiveCampaign):
     """
-    Get data for ecommerce_connections. 
+    Get data for ecommerce_connections.
     Reference : https://developers.activecampaign.com/reference#list-all-connections
     """
     stream_name = 'ecommerce_connections'
-    
+
     replication_keys = ['udate']
     path = 'connections'
     data_key = 'connections'
     created_timestamp = 'cdate'
-    
+
 class EcommerceCustomers(ActiveCampaign):
     """
-    Get data for ecommerce_customers. 
+    Get data for ecommerce_customers.
     Reference : https://developers.activecampaign.com/reference#list-all-customers
     """
     stream_name = 'ecommerce_customers'
@@ -689,7 +710,7 @@ class EcommerceCustomers(ActiveCampaign):
 
 class EcommerceOrders(ActiveCampaign):
     """
-    Get data for ecommerce orders. 
+    Get data for ecommerce orders.
     Reference : https://developers.activecampaign.com/reference#list-all-customers
     """
     stream_name = 'ecommerce_orders'
@@ -702,7 +723,7 @@ class EcommerceOrders(ActiveCampaign):
 
 class EcommerceOrderProducts(ActiveCampaign):
     """
-    Get data for ecommerce order products. 
+    Get data for ecommerce order products.
     Reference : https://developers.activecampaign.com/reference#list-products-for-order
     """
     stream_name = 'ecommerce_order_products'
@@ -713,7 +734,7 @@ class EcommerceOrderProducts(ActiveCampaign):
 
 class Forms(ActiveCampaign):
     """
-    Get data for forms. 
+    Get data for forms.
     Reference : https://developers.activecampaign.com/reference#forms-1
     """
     stream_name = 'forms'
@@ -724,17 +745,17 @@ class Forms(ActiveCampaign):
 
 class Groups(ActiveCampaign):
     """
-    Get data for groups. 
+    Get data for groups.
     Reference : https://developers.activecampaign.com/reference#list-all-groups
     """
     stream_name = 'groups'
     replication_method = 'FULL_TABLE'
     path = 'groups'
     data_key = 'groups'
-    
+
 class Lists(ActiveCampaign):
     """
-    Get data for lists. 
+    Get data for lists.
     Reference : https://developers.activecampaign.com/reference#retrieve-all-lists
     """
     stream_name = 'lists'
@@ -746,7 +767,7 @@ class Lists(ActiveCampaign):
 
 class Messages(ActiveCampaign):
     """
-    Get data for messages. 
+    Get data for messages.
     Reference : https://developers.activecampaign.com/reference#list-all-messages
     """
     stream_name = 'messages'
@@ -757,29 +778,29 @@ class Messages(ActiveCampaign):
 
 class SavedResponses(ActiveCampaign):
     """
-    Get data for saved_responses. 
+    Get data for saved_responses.
     Reference : https://developers.activecampaign.com/reference#list-all-saved-responses
     """
     stream_name = 'saved_responses'
     replication_keys = ['mdate']
     path = 'savedResponses'
     data_key = 'savedResponses'
-    created_timestamp = 'cdate' 
+    created_timestamp = 'cdate'
 
 class Scores(ActiveCampaign):
     """
-    Get data for scores. 
+    Get data for scores.
     Reference : https://developers.activecampaign.com/reference#retrieve-a-score
     """
     stream_name = 'scores'
     replication_keys = ['mdate']
     path = 'scores'
     data_key = 'scores'
-    created_timestamp = 'cdate' 
+    created_timestamp = 'cdate'
 
 class Segments(ActiveCampaign):
     """
-    Get data for segments. 
+    Get data for segments.
     Reference : https://developers.activecampaign.com/reference#list-all-segments
     """
     stream_name = 'segments'
@@ -789,7 +810,7 @@ class Segments(ActiveCampaign):
 
 class Tags(ActiveCampaign):
     """
-    Get data for tags. 
+    Get data for tags.
     Reference : https://developers.activecampaign.com/reference#list-all-tags
     """
     stream_name = 'tags'
@@ -799,7 +820,7 @@ class Tags(ActiveCampaign):
 
 class TaskTypes(ActiveCampaign):
     """
-    Get data for task_types. 
+    Get data for task_types.
     Reference : https://developers.activecampaign.com/reference#list-all-deal-task-types
     """
     stream_name = 'task_types'
@@ -809,7 +830,7 @@ class TaskTypes(ActiveCampaign):
 
 class Tasks(ActiveCampaign):
     """
-    Get data for tasks. 
+    Get data for tasks.
     Reference : https://developers.activecampaign.com/reference#list-all-tasks
     """
     stream_name = 'tasks'
@@ -821,7 +842,7 @@ class Tasks(ActiveCampaign):
 
 class Templates(ActiveCampaign):
     """
-    Get data for templates. 
+    Get data for templates.
     Reference : https://developers.activecampaign.com/reference#templates
     """
     stream_name = 'templates'
@@ -831,7 +852,7 @@ class Templates(ActiveCampaign):
 
 class Users(ActiveCampaign):
     """
-    Get data for users. 
+    Get data for users.
     Reference : https://developers.activecampaign.com/reference#users
     """
     stream_name = 'users'
@@ -841,7 +862,7 @@ class Users(ActiveCampaign):
 
 class Webhooks(ActiveCampaign):
     """
-    Get data for webhooks. 
+    Get data for webhooks.
     Reference : https://developers.activecampaign.com/reference#webhooks
     """
     stream_name = 'webhooks'
@@ -853,7 +874,7 @@ class Webhooks(ActiveCampaign):
 
 class Activities(ActiveCampaign):
     """
-    Get data for activities. 
+    Get data for activities.
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
@@ -863,7 +884,7 @@ class Activities(ActiveCampaign):
 
 class AutomationBlocks(ActiveCampaign):
     """
-    Get data for automation_blocks. 
+    Get data for automation_blocks.
     """
     stream_name = 'automation_blocks'
     replication_keys = ['mdate']
@@ -873,7 +894,7 @@ class AutomationBlocks(ActiveCampaign):
 
 class BounceLogs(ActiveCampaign):
     """
-    Get data for bounce_logs. 
+    Get data for bounce_logs.
     """
     stream_name = 'bounce_logs'
     replication_keys = ['updated_timestamp']
@@ -883,7 +904,7 @@ class BounceLogs(ActiveCampaign):
 
 class CampaignLists(ActiveCampaign):
     """
-    Get data for campaign_lists. 
+    Get data for campaign_lists.
     """
     stream_name = 'campaign_lists'
     replication_method = 'FULL_TABLE'
@@ -892,16 +913,16 @@ class CampaignLists(ActiveCampaign):
 
 class CampaignMessages(ActiveCampaign):
     """
-    Get data for campaign_messages. 
+    Get data for campaign_messages.
     """
     stream_name = 'campaign_messages'
     replication_method = 'FULL_TABLE'
     path = 'campaignMessages'
     data_key = 'campaignMessages'
-    
+
 class Configs(ActiveCampaign):
     """
-    Get data for configs. 
+    Get data for configs.
     """
     stream_name = 'configs'
     replication_keys = ['updated_timestamp']
@@ -911,7 +932,7 @@ class Configs(ActiveCampaign):
 
 class ContactData(ActiveCampaign):
     """
-    Get data for contact_data. 
+    Get data for contact_data.
     """
     stream_name = 'contact_data'
     replication_keys = ['tstamp']
@@ -920,7 +941,7 @@ class ContactData(ActiveCampaign):
 
 class ContactEmails(ActiveCampaign):
     """
-    Get data for contact_emails. 
+    Get data for contact_emails.
     """
     stream_name = 'contact_emails'
     replication_keys = ['sdate']
@@ -930,7 +951,7 @@ class ContactEmails(ActiveCampaign):
 
 class ContactLists(ActiveCampaign):
     """
-    Get data for contact_lists. 
+    Get data for contact_lists.
     """
     stream_name = 'contact_lists'
     replication_keys = ['updated_timestamp']
@@ -940,7 +961,7 @@ class ContactLists(ActiveCampaign):
 
 class ContactTags(ActiveCampaign):
     """
-    Get data for contact_tags. 
+    Get data for contact_tags.
     """
     stream_name = 'contact_tags'
     replication_keys = ['updated_timestamp']
@@ -950,7 +971,7 @@ class ContactTags(ActiveCampaign):
 
 class ContactConversions(ActiveCampaign):
     """
-    Get data for contact_conversions. 
+    Get data for contact_conversions.
     """
     stream_name = 'contact_conversions'
     replication_keys = ['cdate']
@@ -959,7 +980,7 @@ class ContactConversions(ActiveCampaign):
 
 class Conversions(ActiveCampaign):
     """
-    Get data for conversions. 
+    Get data for conversions.
     """
     stream_name = 'conversions'
     replication_keys = ['udate']
@@ -967,10 +988,10 @@ class Conversions(ActiveCampaign):
     data_key = 'conversions'
     created_timestamp = 'cdate'
     links= ['contactConversions']
- 
+
 class ConversionTriggers(ActiveCampaign):
     """
-    Get data for conversion_triggers. 
+    Get data for conversion_triggers.
     """
     stream_name = 'conversion_triggers'
     replication_keys = ['udate']
@@ -980,7 +1001,7 @@ class ConversionTriggers(ActiveCampaign):
 
 class DealActivities(ActiveCampaign):
     """
-    Get data for deal_activities. 
+    Get data for deal_activities.
     """
     stream_name = 'deal_activities'
     replication_keys = ['cdate']
@@ -989,7 +1010,7 @@ class DealActivities(ActiveCampaign):
 
 class DealGroupUsers(ActiveCampaign):
     """
-    Get data for deal_group_users. 
+    Get data for deal_group_users.
     """
     stream_name = 'deal_group_users'
     replication_method = 'FULL_TABLE'
@@ -998,7 +1019,7 @@ class DealGroupUsers(ActiveCampaign):
 
 class EcommerceOrderActivities(ActiveCampaign):
     """
-    Get data for ecommerce_order_activities. 
+    Get data for ecommerce_order_activities.
     """
     stream_name = 'ecommerce_order_activities'
     replication_keys = ['updated_date']
@@ -1008,7 +1029,7 @@ class EcommerceOrderActivities(ActiveCampaign):
 
 class EmailActivities(ActiveCampaign):
     """
-    Get data for email_activities. 
+    Get data for email_activities.
     """
     stream_name = 'email_activities'
     replication_method = 'FULL_TABLE'
@@ -1017,7 +1038,7 @@ class EmailActivities(ActiveCampaign):
 
 class Goals(ActiveCampaign):
     """
-    Get data for goals. 
+    Get data for goals.
     """
     stream_name = 'goals'
     replication_method = 'FULL_TABLE'
@@ -1026,7 +1047,7 @@ class Goals(ActiveCampaign):
 
 class SiteMessages(ActiveCampaign):
     """
-    Get data for site_messages. 
+    Get data for site_messages.
     """
     stream_name = 'site_messages'
     replication_keys = ['ldate']
@@ -1035,7 +1056,7 @@ class SiteMessages(ActiveCampaign):
 
 class Sms(ActiveCampaign):
     """
-    Get data for sms. 
+    Get data for sms.
     """
     stream_name = 'sms'
     replication_keys = ['tstamp']

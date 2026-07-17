@@ -6,79 +6,28 @@ import requests
 from singer import metrics, utils
 import singer
 
+from tap_activecampaign.exceptions import (
+    Server5xxError,
+    Server429Error,
+    ActiveCampaignError,
+    ActiveCampaignBadRequestError,
+    ActiveCampaignUnauthorizedError,
+    ActiveCampaignForbiddenError,
+    ActiveCampaignNotFoundError,
+    ActiveCampaignUnprocessableEntityError,
+    ActiveCampaignRateLimitError,
+    ActiveCampaignInternalServerError,
+    STATUS_CODE_EXCEPTION_MAPPING,
+)
+
+
 LOGGER = singer.get_logger()
 REQUEST_TIMEOUT = 300
 
 DEFAULT_API_VERSION = '3'
 
-
-class Server5xxError(Exception):
-    pass
-
-
-class Server429Error(Exception):
-    pass
-
-
-class ActiveCampaignError(Exception):
-    pass
-class ActiveCampaignBadRequestError(ActiveCampaignError):
-    pass
-
-class ActiveCampaignUnauthorizedError(ActiveCampaignError):
-    pass
-
-class ActiveCampaignForbiddenError(ActiveCampaignError):
-    pass
-
-class ActiveCampaignNotFoundError(ActiveCampaignError):
-    pass
-
-class ActiveCampaignUnprocessableEntityError(ActiveCampaignError):
-    pass
-
-class ActiveCampaignRateLimitError(Server429Error):
-    pass
-
-class ActiveCampaignInternalServerError(Server5xxError):
-    pass
-
-
-# Errors Reference: https://developers.activecampaign.com/reference#errors
-STATUS_CODE_EXCEPTION_MAPPING = {
-    400: {
-        "raise_exception": ActiveCampaignBadRequestError,
-        "message": "A validation exception has occurred."
-    },
-    401: {
-        "raise_exception": ActiveCampaignUnauthorizedError,
-        "message": "Invalid authorization credentials."
-    },
-    403: {
-        "raise_exception": ActiveCampaignForbiddenError,
-        "message": "The request could not be authenticated or the authenticated user is not authorized to access the requested resource."
-    },
-    404: {
-        "raise_exception": ActiveCampaignNotFoundError,
-        "message": "The requested resource does not exist."
-    },
-    422: {
-        "raise_exception": ActiveCampaignUnprocessableEntityError,
-        "message": "The request could not be processed, usually due to a missing or invalid parameter."
-    },
-    429: {
-        "raise_exception": ActiveCampaignRateLimitError,
-        "message": "The user has sent too many requests in a given amount of time ('rate limiting') - contact support or account manager for more details."
-    },
-    500: {
-        "raise_exception": ActiveCampaignInternalServerError,
-        "message": "The server encountered an unexpected condition which prevented" \
-            " it from fulfilling the request."
-    }
-}
-
 def should_retry_error(exception):
-    """ 
+    """
         Return true if exception is required to retry otherwise return false
     """
 
@@ -137,7 +86,7 @@ def raise_for_error(response):
         message = "HTTP-error-code: {}, Error: {}".format(status_code,
                 response_json.get("message", STATUS_CODE_EXCEPTION_MAPPING.get(
                 status_code, {}).get("message", "Unknown Error")))
-    
+
     exc = get_exception_for_status_code(status_code)
 
     raise exc(message) from None
@@ -164,7 +113,6 @@ def is_api_url_valid(api_url):
             return False
 
     return True
-
 
 
 class ActiveCampaignClient(object):

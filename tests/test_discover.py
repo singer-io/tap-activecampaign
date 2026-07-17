@@ -38,7 +38,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
         found_catalog_names = {c['tap_stream_id'] for c in found_catalogs}
         self.assertTrue(all([re.fullmatch(r"[a-z_]+",  name) for name in found_catalog_names]),
                         msg="One or more streams don't follow standard naming")
-        
+
         for stream in streams_to_test:
             with self.subTest(stream=stream):
 
@@ -59,10 +59,10 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                 schema_and_metadata = menagerie.get_annotated_schema(
                     conn_id, catalog['stream_id'])
                 metadata = schema_and_metadata["metadata"]
-                
+
                 stream_properties = [
                     item for item in metadata if item.get("breadcrumb") == []]
-                
+
                 actual_primary_keys = set(
                     stream_properties[0].get(
                         "metadata", {self.PRIMARY_KEYS: []}).get(self.PRIMARY_KEYS, [])
@@ -77,7 +77,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                     item.get("breadcrumb", ["properties", None])[1] for item in metadata
                     if item.get("metadata").get("inclusion") == "automatic"
                 )
-                
+
                 actual_fields = []
                 for md_entry in metadata:
                     if md_entry['breadcrumb'] != []:
@@ -99,7 +99,7 @@ class ActiveCampaignDiscover(ActiveCampaignTest):
                 self.assertSetEqual(
                     expected_primary_keys, actual_primary_keys,
                 )
-                
+
                 # verify that primary keys and replication keys
                 # are given the inclusion of automatic in metadata.
                 self.assertSetEqual(expected_automatic_fields,

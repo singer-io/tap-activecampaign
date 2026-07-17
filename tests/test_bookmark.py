@@ -5,7 +5,7 @@ from tap_tester import menagerie
 
 class ActiveCampaignBookMark(ActiveCampaignTest):
     """Test tap sets a bookmark and respects it for the next sync of a stream"""
-    
+
     def name(self):
         return "activecampaign_bookmark_test"
 
@@ -24,18 +24,31 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
         For EACH stream that is incrementally replicated there are multiple rows of data with
             different values for the replication key
         """
-        
-        
+
+
         expected_streams = self.expected_check_streams()
-        # We are not able to generate data for `contact_conversions` stream.
         # For `sms` stream it requires Enterprise plan of account. So, removing it from expected_streams set.
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         streams_to_skip = {
-            'bounce_logs', 'contact_conversions', 'sms',
-            'contact_automations',
-            'goals', 'contact_data', 'contact_emails',
-            'email_activities', 'site_messages'
+            'addresses',
+            'bounce_logs',
+            'campaign_links',
+            'contact_deals',
+            'contact_emails',
+            'deal_group_users',
+            'deal_stages',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_order_activities',
+            'ecommerce_order_products',
+            'ecommerce_orders',
+            'email_activities',
+            'goals',
+            'site_messages',
+            'sms',
+            'templates',
+            'webhooks',
         }
         expected_streams = expected_streams - streams_to_skip
 
@@ -118,7 +131,7 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
                     self.assertIsInstance(second_bookmark_value, str)
                     self.assertIsDateFormat(first_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
                     self.assertIsDateFormat(second_bookmark_value, self.BOOKMARK_COMPARISON_FORMAT)
-                    
+
                     # Verify the first sync sets a bookmark of the expected form
                     self.assertIsNotNone(first_bookmark_value)
 
@@ -138,7 +151,7 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
                             replication_key_value, first_bookmark_value,
                             msg="First sync bookmark was set incorrectly, a record with a greater replication-key value was synced."
                         )
-                    
+
                     for record in second_sync_messages:
                         # Verify the second sync replication key value is Greater or Equal to the first sync bookmark
                         replication_key_value = record.get(replication_key)

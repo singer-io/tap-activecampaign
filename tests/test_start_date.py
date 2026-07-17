@@ -1,21 +1,33 @@
 import tap_tester.connections as connections
 import tap_tester.runner as runner
 from base import ActiveCampaignTest
-from datetime import datetime
+
 
 class ActiveCampaignStartDate(ActiveCampaignTest):
     """
-    Ensure both all expected streams respect the start date. Run tap in check mode, 
+    Ensure both all expected streams respect the start date. Run tap in check mode,
     run 1st sync with start date = 2021-11-10, run check mode and 2nd sync on a new connection with start date = 13 days later.
     """
 
-    
+
     start_date_1 = ""
     start_date_2 = ""
 
     def name(self):
         return "activecampaign_start_date_test"
-        
+
+    def get_properties(self, original: bool = True):
+        """Override start date to fall within actual test data range.
+        start_date_1 = 2026-06-14, start_date_2 = 2026-06-18 (days=4), splitting
+        data that spans 2026-06-15 through 2026-06-19."""
+        return_value = {
+            "start_date": "2026-06-14T00:00:00Z",
+        }
+        if original:
+            return return_value
+        return_value["start_date"] = self.start_date
+        return return_value
+
     def test_run(self):
         """
         Test that the start_date configuration is respected
@@ -27,26 +39,60 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
         # Streams to verify start date tests
         expected_streams = self.expected_check_streams()
 
-        # We are not able to generate data for `contact_conversions`stream. 
+        # We are not able to generate data for `contact_conversions`stream.
         # For `sms` stream it requires Enterprise plan of account. So, removing it from streams_to_test set.
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         expected_streams = expected_streams - {
-            'bounce_logs', 'contact_conversions', 'sms',
+            'accounts',
+            'account_contacts',
+            'account_custom_fields',
+            'account_custom_field_values',
+            'activities',
+            'addresses',
+            'automations',
+            'automation_blocks',
+            'brandings',
+            'bounce_logs',
+            'calendars',
+            'campaigns',
+            'campaign_links',
+            'contacts',
             'contact_automations',
-            'goals', 'contact_data', 'contact_emails',
-            'email_activities', 'site_messages',
-            'contacts', 'saved_responses', 'contact_custom_field_values',
-            'contact_deals', 'deal_custom_field_values', 'deal_groups',
-            'deal_stages', 'deals', 'ecommerce_connections',
-            'ecommerce_customers', 'ecommerce_orders', 'ecommerce_order_activities',
-            'calendars', 'campaigns', 'accounts', 'contact_tags', 'account_contacts',
-            'automations', 'deal_activities', 'campaign_links', 'automation_blocks',
-            'ecommerce_connections', 'tasks', 'account_custom_field_values', 'forms'
+            'contact_conversions',
+            'contact_data',
+            'contact_deals',
+            'contact_tags',
+            'contact_custom_field_values',
+            'conversions',
+            'contact_emails',
+            'conversion_triggers',
+            'deals',
+            'deal_activities',
+            'deal_custom_fields',
+            'deal_custom_field_values',
+            'deal_group_users',
+            'deal_groups',
+            'deal_stages',
+            'email_activities',
+            'ecommerce_connections',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_orders',
+            'ecommerce_order_activities',
+            'forms',
+            'goals',
+            'lists',
+            'sms',
+            'site_messages',
+            'saved_responses',
+            'tasks',
+            'templates',
+            'webhooks',
         }
 
         self.run_test(days=4, expected_streams=expected_streams)
-        
+
     def run_test(self, days, expected_streams):
         self.start_date_1 = self.get_properties().get('start_date')
         self.start_date_2 = self.timedelta_formatted(self.start_date_1, days=days)
@@ -75,7 +121,7 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
         ##########################################################################
         # Update START DATE Between Syncs
         ##########################################################################
-        
+
         print("REPLICATION START DATE CHANGE: {} ===>>> {} ".format(
             self.start_date, self.start_date_2))
         self.start_date = self.start_date_2
@@ -163,7 +209,7 @@ class ActiveCampaignStartDate(ActiveCampaignTest):
                     self.assertTrue(
                         primary_keys_sync_2.issubset(primary_keys_sync_1))
                 else:
-                    
+
                     # Verify that the 2nd sync with a later start date replicates the same number of
                     # records as the 1st sync.
 

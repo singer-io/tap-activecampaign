@@ -10,7 +10,7 @@ import pytz
 
 class ActiveCampaignTest(unittest.TestCase):
     start_date = ""
-    
+
     START_DATE_FORMAT = "%Y-%m-%dT00:00:00Z"
     PRIMARY_KEYS = "table-key-properties"
     REPLICATION_METHOD = "forced-replication-method"
@@ -24,7 +24,7 @@ class ActiveCampaignTest(unittest.TestCase):
     def tap_name(self):
         """The name of the tap"""
         return "tap-activecampaign"
-    
+
     def setUp(self):
         required_env = {
             "TAP_ACTIVECAMPAIGN_API_TOKEN",
@@ -33,7 +33,7 @@ class ActiveCampaignTest(unittest.TestCase):
         missing_envs = [v for v in required_env if not os.getenv(v)]
         if missing_envs:
             raise Exception("set " + ", ".join(missing_envs))
-        
+
     def get_type(self):
         return "platform.activecampaign"
 
@@ -55,7 +55,7 @@ class ActiveCampaignTest(unittest.TestCase):
         # Reassign start date
         return_value["start_date"] = self.start_date
         return return_value
-    
+
     def expected_metadata(self):
         """The expected streams and metadata about the streams"""
         return {
@@ -69,7 +69,7 @@ class ActiveCampaignTest(unittest.TestCase):
                 self.PRIMARY_KEYS: {'id'},
                 self.REPLICATION_METHOD: self.INCREMENTAL,
                 self.REPLICATION_KEYS: {'updated_timestamp'},
-                self.OBEYS_START_DATE: True      
+                self.OBEYS_START_DATE: True
             },
             'account_custom_fields': {
                 self.PRIMARY_KEYS: {'id'},
@@ -575,7 +575,7 @@ class ActiveCampaignTest(unittest.TestCase):
         date_object = dateutil.parser.parse(date_str)
         date_object_utc = date_object.astimezone(tz=pytz.UTC)
         return dt.strftime(date_object_utc, "%Y-%m-%dT%H:%M:%SZ")
-    
+
     def timedelta_formatted(self, dtime, days=0):
         try:
             date_stripped = dt.strptime(dtime, self.START_DATE_FORMAT)
@@ -606,7 +606,7 @@ class ActiveCampaignTest(unittest.TestCase):
 
         raise NotImplementedError(
             "Tests do not account for dates of this format: {}".format(date_value))
-    
+
     @staticmethod
     def assertIsDateFormat(value, str_format):
         """Assertion Method that verifies a string value is a formatted

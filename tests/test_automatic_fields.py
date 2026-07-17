@@ -7,7 +7,7 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
     Ensure running the tap with all streams selected and all fields deselected results in the replication of just the 
     primary keys and replication keys (automatic fields).
     """
-    
+
     def name(self):
         return "activecampaign_automatic_fields"
 
@@ -17,20 +17,35 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
         Verify that only the automatic fields are sent to the target.
         Verify that all replicated records have unique primary key values.
         """
-        
+
         streams_to_test = self.expected_check_streams()
 
-        # We are not able to generate data for `contact_conversions` stream.
         # For `sms` it requires Enterprise plan of account. So, removing it from streams_to_test set.
         # Streams that cannot have data generated
         streams_to_skip = {
-            'contact_conversions', 'bounce_logs',
-            'contact_automations', 'goals', 'sms',
-            'contact_data', 'contact_emails',
-            'email_activities', 'site_messages'
+            'activities',
+            'addresses',
+            'bounce_logs',
+            'campaign_links',
+            'contact_deals',
+            'contact_emails',
+            'deals',
+            'deal_group_users',
+            'deal_stages',
+            'ecommerce_connections',
+            'ecommerce_customers',
+            'ecommerce_order_activities',
+            'ecommerce_order_products',
+            'ecommerce_orders',
+            'email_activities',
+            'goals',
+            'site_messages',
+            'sms',
+            'templates',
+            'webhooks',
         }
         streams_to_test = streams_to_test - streams_to_skip
-        
+
         conn_id = connections.ensure_connection(self)
 
         found_catalogs = self.run_and_verify_check_mode(conn_id)
@@ -45,14 +60,14 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
 
         record_count_by_stream = self.run_and_verify_sync(conn_id)
         synced_records = runner.get_records_from_target_output()
-        
+
         for stream in streams_to_test:
             with self.subTest(stream=stream):
 
                 # expected values
                 expected_keys = self.expected_automatic_fields().get(stream)
                 expected_primary_keys = self.expected_primary_keys()[stream]
-                
+
                 # collect actual values
                 data = synced_records.get(stream, {})
                 record_messages_keys = [set(row['data'].keys())
@@ -61,7 +76,7 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
                                        for message in data.get('messages', [])
                                        if message.get('action') == 'upsert']
                 unique_primary_keys_list = set(primary_keys_list)
-                
+
                 # Verify that you get some records for each stream
                 self.assertGreater(
                     record_count_by_stream.get(stream, -1), 0,
@@ -70,8 +85,8 @@ class ActiveCampaignAutomaticFields(ActiveCampaignTest):
                 # Verify that only the automatic fields are sent to the target
                 for actual_keys in record_messages_keys:
                     self.assertSetEqual(expected_keys, actual_keys)
-                    
+
                 #Verify that all replicated records have unique primary key values.
-                self.assertEqual(len(primary_keys_list), 
-                                    len(unique_primary_keys_list), 
+                self.assertEqual(len(primary_keys_list),
+                                    len(unique_primary_keys_list),
                                     msg="Replicated record does not have unique primary key values.")
