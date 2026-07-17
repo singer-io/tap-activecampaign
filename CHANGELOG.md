@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.6.0
+  * Mark email_activities as FULL_TABLE stream [#57](https://github.com/singer-io/tap-activecampaign/pull/57)
+
 ## 1.5.0
   * Exclude streams with unauthorized access from catalog during discovery [#55](https://github.com/singer-io/tap-activecampaign/pull/55)
   * Upgrade backoff lib version to 2.2.1, requests to 2.34.2, singer-python to 6.8.0
