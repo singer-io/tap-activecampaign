@@ -210,7 +210,12 @@ This tap:
   - Bookmark: mdate
 - Transformations: camelCase to snake_case, remove links node
 
-
+[email_activities](https://developers.activecampaign.com/reference/list-all-email-activities)
+- Endpoint: https://{subdomain}.api-us1.com/emailActivities
+- Data key: emailActivities
+- Primary keys: id
+- Replication strategy: Full Table
+- Transformations: camelCase to snake_case, remove links node
 
 ## Authentication
 
@@ -277,7 +282,6 @@ This tap:
           "messages": "2020-07-22T19:12:02.000000Z",
           "contact_custom_field_values": "2020-06-08T18:42:51.000000Z",
           "account_contacts": "2020-07-22T19:16:06.000000Z",
-          "email_activities": "2020-07-22T19:17:54.000000Z",
           "automations": "2020-07-22T19:17:23.000000Z",
           "campaign_links": "2020-07-22T14:12:24.000000Z",
           "automation_blocks": "2020-07-22T19:48:41.000000Z",

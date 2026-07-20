@@ -1032,7 +1032,7 @@ class EmailActivities(ActiveCampaign):
     Get data for email_activities.
     """
     stream_name = 'email_activities'
-    replication_keys = ['tstamp']
+    replication_method = 'FULL_TABLE'
     path = 'emailActivities'
     data_key = 'emailActivities'
 

@@ -126,7 +126,7 @@ class ActiveCampaignClient(object):
         self.__user_agent = user_agent
         self.__session = requests.Session()
         self.__verified = False
-        self.base_url = '{}/api/{}/users/me'.format(self.__api_url, DEFAULT_API_VERSION)
+        self.base_url = '{}/api/{}/'.format(self.__api_url, DEFAULT_API_VERSION)
 
         if not is_api_url_valid(api_url):
             raise Exception('Error: api_url is not valid')
@@ -158,7 +158,7 @@ class ActiveCampaignClient(object):
             headers['User-Agent'] = self.__user_agent
         headers['Api-Token'] = self.__api_token
         headers['Accept'] = 'application/json'
-        url = self.base_url
+        url = self.base_url + 'users/me'
         response = self.__session.get(
             # Simple endpoint that returns 1 record w/ default organization URN
             url=url,

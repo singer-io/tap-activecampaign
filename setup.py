@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name='tap-activecampaign',
-      version='1.5.0',
+      version='1.6.0',
       description='Singer.io tap for extracting data from the ActiveCampaign API',
       author='jeff.huth@bytecode.io',
       classifiers=['Programming Language :: Python :: 3 :: Only'],
