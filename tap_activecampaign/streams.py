@@ -38,6 +38,9 @@ class ActiveCampaign:
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
+    parent_query_field = None
+    child_last_bookmark = None
+    child_max_bookmark = None
     links = []
     children = []
 
@@ -207,6 +210,7 @@ class ActiveCampaign:
 
         static_params = self.params
         bookmark_query_field = self.bookmark_query_field
+        parent_query_field = self.parent_query_field
         bookmark_field = next(iter(self.replication_keys or []), None)
         # Get the latest bookmark for the stream and set the last_integer/datetime
         last_datetime = None
@@ -214,6 +218,9 @@ class ActiveCampaign:
 
         last_datetime = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
+        if parent:
+            last_datetime = self.child_last_bookmark
+            max_bookmark_value = self.child_max_bookmark
         LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
             self.stream_name, bookmark_field, last_datetime))
         now_datetime = utils.now()
@@ -240,6 +247,8 @@ class ActiveCampaign:
 
             if bookmark_query_field:
                 params[bookmark_query_field] = last_datetime
+            if parent_query_field:
+                params[parent_query_field] = parent_id
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
@@ -260,7 +269,10 @@ class ActiveCampaign:
         # Update the state with the max_bookmark_value for the endpoint
         # ActiveCampaign API does not allow page/batch sorting; bookmark written for endpoint
         if bookmark_field:
-            self.write_bookmark(state, self.stream_name, max_bookmark_value)
+            if self.parent:
+                self.child_max_bookmark = max_bookmark_value
+            else:
+                self.write_bookmark(state, self.stream_name, max_bookmark_value)
 
         # Return total_records (for all pages and date windows)
         return endpoint_total
@@ -305,6 +317,9 @@ class ActiveCampaign:
                 LOGGER.info('START Syncing: {}'.format(child_stream_name))
                 child_stream_obj = STREAMS[child_stream_name](self.client)
                 child_stream_obj.write_schema(catalog, child_stream_name)
+                current_bookmark = self.get_bookmark(state, child_stream_name, start_date)
+                child_stream_obj.child_last_bookmark = current_bookmark
+                child_stream_obj.child_max_bookmark = current_bookmark
                 parent_id_field = None
                 # For each parent record
                 for record in transformed_data:
@@ -339,6 +354,10 @@ class ActiveCampaign:
                         'FINISHED Sync for Stream: {}, parent_id: {}, total_records: {}'\
                             .format(child_stream_name, parent_id, child_total_records))
                     # End transformed data record loop
+
+                # Write child bookmark ONCE after all parents in this batch
+                if child_stream_obj.child_max_bookmark:
+                    self.write_bookmark(state, child_stream_name, child_stream_obj.child_max_bookmark)
                 # End if child in selected streams
             # End child streams for parent
         # End if children
@@ -563,6 +582,7 @@ class Contacts(ActiveCampaign):
     data_key = 'contacts'
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
+    children= ['activities']
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
 
 
@@ -881,6 +901,8 @@ class Activities(ActiveCampaign):
     path = 'activities'
     data_key = 'activities'
     bookmark_query_field = 'after'
+    parent = 'contacts'
+    parent_query_field = 'contact'
 
 class AutomationBlocks(ActiveCampaign):
     """
@@ -1126,7 +1148,8 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_orders': 'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products',
+    'contacts': 'activities'
 }
 
 def flatten_streams():
