@@ -219,7 +219,7 @@ class ActiveCampaign:
         last_datetime = self.get_bookmark(state, self.stream_name, start_date)
         max_bookmark_value = last_datetime
         if parent:
-            last_datetime = self.child_last_bookmark
+            last_datetime = type(self).child_last_bookmark
             max_bookmark_value = self.child_max_bookmark
         LOGGER.info('stream: {}, bookmark_field: {}, last_datetime: {}'.format(
             self.stream_name, bookmark_field, last_datetime))
@@ -318,7 +318,12 @@ class ActiveCampaign:
                 child_stream_obj = STREAMS[child_stream_name](self.client)
                 child_stream_obj.write_schema(catalog, child_stream_name)
                 current_bookmark = self.get_bookmark(state, child_stream_name, start_date)
-                child_stream_obj.child_last_bookmark = current_bookmark
+                # Only set child_last_bookmark on the first parent page;
+                # subsequent pages must reuse the original bookmark to avoid
+                # skipping older activities for contacts processed later.
+                child_cls = type(child_stream_obj)
+                if child_cls.child_last_bookmark is None:
+                    child_cls.child_last_bookmark = current_bookmark
                 child_stream_obj.child_max_bookmark = current_bookmark
                 parent_id_field = None
                 # For each parent record
