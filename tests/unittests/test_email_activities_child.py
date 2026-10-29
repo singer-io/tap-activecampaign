@@ -147,6 +147,37 @@ class TestEmailActivitiesSync(unittest.TestCase):
         write_record.assert_not_called()
         self.assertEqual(self.client.get.call_count, 1)
 
+    def test_repeated_full_pages_fail_instead_of_looping(self):
+        # A server that ignores offset keeps returning the same 100 records.
+        self.client.get.return_value = _activities(1, 100)
+
+        with self.assertRaises(RuntimeError):
+            _sync_child(self.client)
+
+        self.assertEqual(self.client.get.call_count, 2)
+
+    def test_page_overlapping_only_seen_records_fails(self):
+        self.client.get.side_effect = [_activities(1, 100), _activities(1, 100), _activities(101, 40)]
+
+        with self.assertRaises(RuntimeError):
+            _sync_child(self.client)
+
+    def test_page_with_some_new_records_is_accepted(self):
+        self.client.get.side_effect = [_activities(1, 100), _activities(91, 100), _activities(191, 10)]
+
+        total, _ = _sync_child(self.client)
+
+        self.assertEqual(total, 210)
+
+    def test_malformed_activities_response_fails(self):
+        for response in ({}, {'meta': {'total': '0'}}, {'emailActivities': None}):
+            with self.subTest(response=response):
+                self.client.get.reset_mock()
+                self.client.get.return_value = response
+                with self.assertRaises(RuntimeError):
+                    _sync_child(self.client)
+                self.assertEqual(self.client.get.call_count, 1)
+
     def test_missing_contact_is_skipped(self):
         self.client.get.side_effect = ActiveCampaignNotFoundError('404')
 
@@ -181,13 +212,26 @@ class TestEmailActivitiesFullContactPass(unittest.TestCase):
         self.client = MagicMock()
         self.client.base_url = 'https://example.api-us1.com/api/3/'
 
-    def _run(self, contact_pages):
-        """contact_pages: list of contact-id lists, one per /contacts page."""
-        pages = iter(contact_pages)
+    @staticmethod
+    def _keyset_server(contact_ids, after_page=None):
+        """Serve /contacts with orders[id]=ASC and id_greater; after_page(n) runs after the n-th page."""
+        served = {'pages': 0}
 
+        def serve(params):
+            last_id = int(params.split('id_greater=')[1].split('&')[0])
+            ids = sorted(i for i in contact_ids if i > last_id)[:100]
+            served['pages'] += 1
+            if after_page:
+                after_page(served['pages'])
+            return {'contacts': [{'id': str(i)} for i in ids]}
+
+        return serve
+
+    def _run(self, contacts_response):
+        """contacts_response: callable(params) returning the /contacts response."""
         def fake_get(path, params=None, endpoint=None):
             if path == 'contacts':
-                return {'contacts': [{'id': str(i)} for i in next(pages)]}
+                return contacts_response(params)
             return {'emailActivities': [], 'meta': {'total': '0'}}
 
         self.client.get.side_effect = fake_get
@@ -205,7 +249,7 @@ class TestEmailActivitiesFullContactPass(unittest.TestCase):
                 if c.kwargs['path'] == 'emailActivities']
 
     def test_every_contact_is_queried_without_updated_after_filter(self):
-        self._run([[11, 12]])
+        self._run(self._keyset_server({11, 12}))
 
         emails = self._email_calls()
         self.assertEqual(len(emails), 2)
@@ -214,16 +258,48 @@ class TestEmailActivitiesFullContactPass(unittest.TestCase):
         for params in self._contact_calls():
             self.assertNotIn('updated_after', params)
 
-    def test_contacts_are_paginated(self):
-        self._run([list(range(1, 101)), [101, 102]])
+    def test_contacts_use_keyset_paging(self):
+        self._run(self._keyset_server(set(range(1, 103))))
 
-        self.assertEqual(len(self._contact_calls()), 2)
-        self.assertIn('offset=100', self._contact_calls()[1])
+        calls = self._contact_calls()
+        self.assertEqual(len(calls), 2)
+        self.assertIn('orders[id]=ASC', calls[0])
+        self.assertIn('id_greater=0', calls[0])
+        self.assertIn('id_greater=100', calls[1])
+        self.assertNotIn('offset', calls[1])
         self.assertEqual(len(self._email_calls()), 102)
 
+    def test_contact_deleted_between_pages_does_not_skip_later_contacts(self):
+        contacts = set(range(1, 102))
+        # Contact 1 was already processed; deleting it must not push contact 101 out of range.
+        server = self._keyset_server(contacts, after_page=lambda n: contacts.discard(1) if n == 1 else None)
+
+        self._run(server)
+
+        requested = [p.split('filters[subscriberid]=')[1].split('&')[0] for p in self._email_calls()]
+        self.assertIn('101', requested)
+        self.assertEqual(len(requested), 101)
+
     def test_no_contacts(self):
-        self.assertEqual(self._run([[]]), 0)
+        self.assertEqual(self._run(self._keyset_server(set())), 0)
         self.assertEqual(self._email_calls(), [])
+
+    def test_malformed_contacts_response_fails(self):
+        for response in ({}, None, {'meta': {'total': '0'}}, {'contacts': None}, {'contacts': {}}):
+            with self.subTest(response=response):
+                self.client.get.reset_mock()
+                with self.assertRaises(RuntimeError):
+                    self._run(lambda params, r=response: r)
+                self.assertEqual(self._email_calls(), [])
+
+    def test_contacts_pagination_without_progress_fails(self):
+        # A server that ignores id_greater keeps returning the same full page.
+        page = {'contacts': [{'id': str(i)} for i in range(1, 101)]}
+
+        with self.assertRaises(RuntimeError):
+            self._run(lambda params: page)
+
+        self.assertEqual(len(self._contact_calls()), 2)
 
 
 class TestSyncEntryPoint(unittest.TestCase):

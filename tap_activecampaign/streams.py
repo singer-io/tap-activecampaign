@@ -225,6 +225,7 @@ class ActiveCampaign:
         now_datetime = utils.now()
         last_dttm = strptime_to_utc(last_datetime)
         endpoint_total = 0
+        self._page_ids_seen = set()
 
         # pagination: loop thru all pages of data
         # Pagination reference: https://developers.activecampaign.com/reference#pagination
@@ -378,6 +379,10 @@ class ActiveCampaign:
                 self.stream_name, parent_id))
             return endpoint_total, 0, 0, page, offset + limit, max_bookmark_value
 
+        if self.parent_query_field and not isinstance((data or {}).get(self.data_key), list):
+            raise RuntimeError('Stream: {}, parent_id: {} returned a malformed response: {}'.format(
+                self.stream_name, parent_id, data))
+
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
 
@@ -406,6 +411,13 @@ class ActiveCampaign:
                             self.stream_name, key, record))
                         raise RuntimeError
                 i = i + 1
+
+            if self.parent_query_field:
+                page_ids = {record.get('id') for record in transformed_data}
+                if page_ids and page_ids <= self._page_ids_seen:
+                    raise RuntimeError('Stream: {}, parent_id: {} returned a page with no new records at offset {}'.format(
+                        self.stream_name, parent_id, offset))
+                self._page_ids_seen |= page_ids
 
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
@@ -1106,14 +1118,19 @@ class EmailActivities(ActiveCampaign):
         """
         self.write_schema(catalog, self.stream_name)
         total = 0
-        offset = 0
+        last_id = 0
         limit = 100
         while True:
+            # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
             data = self.client.get(
                 path='contacts',
-                params='offset={}&limit={}'.format(offset, limit),
+                params='limit={}&orders[id]=ASC&id_greater={}'.format(limit, last_id),
                 endpoint='contacts')
-            contacts = (data or {}).get('contacts', [])
+            contacts = data.get('contacts') if isinstance(data, dict) else None
+            if not isinstance(contacts, list):
+                raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
+            if contacts and int(contacts[-1]['id']) <= last_id:
+                raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
             for contact in contacts:
                 total += self.sync(
                     client=self.client,
@@ -1126,7 +1143,7 @@ class EmailActivities(ActiveCampaign):
                     parent_id=contact['id'])
             if len(contacts) < limit:
                 break
-            offset += limit
+            last_id = int(contacts[-1]['id'])
         return total
 
 class Goals(ActiveCampaign):
