@@ -3,7 +3,11 @@ from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
 from tap_activecampaign.transform import transform_json
 from tap_activecampaign.client import ActiveCampaignClient
-from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
+from tap_activecampaign.exceptions import (
+    ActiveCampaignForbiddenError,
+    ActiveCampaignNotFoundError,
+    ActiveCampaignUnauthorizedError,
+)
 
 LOGGER = singer.get_logger()
 # streams: API URL endpoints to be called
@@ -20,6 +24,7 @@ LOGGER = singer.get_logger()
 #   bookmark_type: Data type for bookmark, integer or datetime
 #   children: A collection of child endpoints (where the endpoint path includes the parent id)
 #   parent: On each of the children, the singular stream name for parent element
+#   parent_query_field: On a child, the query param that carries the parent id (instead of a path placeholder)
 
 class ActiveCampaign:
     """
@@ -35,6 +40,7 @@ class ActiveCampaign:
     path = None
     params = {}
     parent = None
+    parent_query_field = None
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
@@ -219,6 +225,7 @@ class ActiveCampaign:
         now_datetime = utils.now()
         last_dttm = strptime_to_utc(last_datetime)
         endpoint_total = 0
+        self._page_ids_seen = set()
 
         # pagination: loop thru all pages of data
         # Pagination reference: https://developers.activecampaign.com/reference#pagination
@@ -240,6 +247,9 @@ class ActiveCampaign:
 
             if bookmark_query_field:
                 params[bookmark_query_field] = last_datetime
+
+            if self.parent_query_field:
+                params[self.parent_query_field] = parent_id
 
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
@@ -356,10 +366,22 @@ class ActiveCampaign:
 
         # API request data
         data = {}
-        data = self.client.get(
-            path=path,
-            params=querystring,
-            endpoint=self.stream_name)
+        try:
+            data = self.client.get(
+                path=path,
+                params=querystring,
+                endpoint=self.stream_name)
+        except ActiveCampaignNotFoundError:
+            if not self.parent_query_field:
+                raise
+            # Parent record was deleted mid-sync; treat as having no child records.
+            LOGGER.warning('Stream: {}, parent_id: {} not found, skipping'.format(
+                self.stream_name, parent_id))
+            return endpoint_total, 0, 0, page, offset + limit, max_bookmark_value
+
+        if self.parent_query_field and not isinstance((data or {}).get(self.data_key), list):
+            raise RuntimeError('Stream: {}, parent_id: {} returned a malformed response: {}'.format(
+                self.stream_name, parent_id, data))
 
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
@@ -390,6 +412,13 @@ class ActiveCampaign:
                         raise RuntimeError
                 i = i + 1
 
+            if self.parent_query_field:
+                page_ids = {record.get('id') for record in transformed_data}
+                if page_ids and page_ids <= self._page_ids_seen:
+                    raise RuntimeError('Stream: {}, parent_id: {} returned a page with no new records at offset {}'.format(
+                        self.stream_name, parent_id, offset))
+                self._page_ids_seen |= page_ids
+
             # Process records and get the max_bookmark_value and record_count for the set of records
             max_bookmark_value, record_count = self.process_records(
                 catalog=catalog,
@@ -416,6 +445,10 @@ class ActiveCampaign:
             # Get pagination details
             total_count = data.get('meta', {}).get('total') or 0
             api_total = int(total_count)
+
+            # meta.total is not reliable on filtered calls, so keep paging until a short page.
+            if self.parent_query_field:
+                api_total = offset + limit if len(transformed_data) >= limit else 0
 
             if api_total == 0:
                 total_records = record_count
@@ -1030,11 +1063,51 @@ class EcommerceOrderActivities(ActiveCampaign):
 class EmailActivities(ActiveCampaign):
     """
     Get data for email_activities.
+    The unfiltered endpoint only returns emails already imported for a contact; requesting
+    filters[subscriberid] triggers that import, so the stream is fetched per contact.
+    Reference : https://developers.activecampaign.com/reference/list-all-email-activities
     """
     stream_name = 'email_activities'
     replication_method = 'FULL_TABLE'
     path = 'emailActivities'
     data_key = 'emailActivities'
+    parent = 'contacts'
+    parent_query_field = 'filters[subscriberid]'
+
+    def sync_for_all_contacts(self, catalog, state, start_date):
+        """
+        Request email activities for every contact, not only those changed since the last sync,
+        because new emails do not change the contact's udate.
+        """
+        self.write_schema(catalog, self.stream_name)
+        total = 0
+        last_id = 0
+        limit = 100
+        while True:
+            # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
+            data = self.client.get(
+                path='contacts',
+                params='limit={}&orders[id]=ASC&id_greater={}'.format(limit, last_id),
+                endpoint='contacts')
+            contacts = data.get('contacts') if isinstance(data, dict) else None
+            if not isinstance(contacts, list):
+                raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
+            if contacts and int(contacts[-1]['id']) <= last_id:
+                raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
+            for contact in contacts:
+                total += self.sync(
+                    client=self.client,
+                    catalog=catalog,
+                    state=state,
+                    start_date=start_date,
+                    path=self.path,
+                    selected_streams=[self.stream_name],
+                    parent=self.parent,
+                    parent_id=contact['id'])
+            if len(contacts) < limit:
+                break
+            last_id = int(contacts[-1]['id'])
+        return total
 
 class Goals(ActiveCampaign):
     """
@@ -1126,7 +1199,8 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_orders': 'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products',
+    'contacts': 'email_activities'
 }
 
 def flatten_streams():
