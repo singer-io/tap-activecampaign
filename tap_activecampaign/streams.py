@@ -434,9 +434,9 @@ class ActiveCampaign:
             total_count = data.get('meta', {}).get('total') or 0
             api_total = int(total_count)
 
-            # A short page is the last page, whatever meta.total reports for a filtered call.
-            if self.parent_query_field and len(transformed_data) < limit:
-                api_total = 0
+            # meta.total is not reliable on filtered calls, so keep paging until a short page.
+            if self.parent_query_field:
+                api_total = offset + limit if len(transformed_data) >= limit else 0
 
             if api_total == 0:
                 total_records = record_count

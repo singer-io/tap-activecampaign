@@ -99,6 +99,35 @@ class TestEmailActivitiesSync(unittest.TestCase):
         self.assertIn('offset=0', offsets[0])
         self.assertIn('offset=100', offsets[1])
 
+    def test_keeps_paging_when_meta_total_is_page_local(self):
+        # 250 records, but each response reports only its own page size as the total.
+        self.client.get.side_effect = [_activities(1, 100), _activities(101, 100), _activities(201, 50)]
+
+        total, write_record = _sync_child(self.client)
+
+        self.assertEqual(total, 250)
+        self.assertEqual(write_record.call_count, 250)
+        self.assertEqual(self.client.get.call_count, 3)
+
+    def test_keeps_paging_when_meta_total_is_missing(self):
+        pages = [_activities(1, 100), _activities(101, 100), _activities(201, 50)]
+        for page in pages:
+            del page['meta']
+        self.client.get.side_effect = pages
+
+        total, _ = _sync_child(self.client)
+
+        self.assertEqual(total, 250)
+        self.assertEqual(self.client.get.call_count, 3)
+
+    def test_exact_multiple_of_page_size_ends_on_empty_page(self):
+        self.client.get.side_effect = [_activities(1, 100), {'emailActivities': [], 'meta': {'total': '0'}}]
+
+        total, _ = _sync_child(self.client)
+
+        self.assertEqual(total, 100)
+        self.assertEqual(self.client.get.call_count, 2)
+
     def test_short_page_ends_pagination_even_if_meta_total_is_global(self):
         page = _activities(1, 5)
         page['meta']['total'] = '8295'
