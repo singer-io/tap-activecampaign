@@ -1,7 +1,7 @@
 # Changelog
 
 ## 1.7.0
-  * Sync email_activities per contact (child of contacts) using `filters[subscriberid]` so that all email history is returned
+  * Sync email_activities per contact (child of contacts) using `filters[subscriberid]` so that all email history is returned [#58](https://github.com/singer-io/tap-activecampaign/pull/58)
 
 ## 1.6.0
   * Mark email_activities as FULL_TABLE stream [#57](https://github.com/singer-io/tap-activecampaign/pull/57)
