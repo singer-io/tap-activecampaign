@@ -215,7 +215,7 @@ This tap:
 - Data key: emailActivities
 - Primary keys: id
 - Replication strategy: Full Table
-- Parent stream: contacts (requested once per synced contact; syncs only when contacts is also selected)
+- Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected)
 - Transformations: camelCase to snake_case, remove links node
 
 ## Authentication

@@ -585,7 +585,7 @@ class Contacts(ActiveCampaign):
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
-    children = ['email_activities']
+
 
 
 class ContactAutomations(ActiveCampaign):
@@ -1062,6 +1062,36 @@ class EmailActivities(ActiveCampaign):
     data_key = 'emailActivities'
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
+
+    def sync_for_all_contacts(self, catalog, state, start_date):
+        """
+        Request email activities for every contact, not only those changed since the last sync,
+        because new emails do not change the contact's udate.
+        """
+        self.write_schema(catalog, self.stream_name)
+        total = 0
+        offset = 0
+        limit = 100
+        while True:
+            data = self.client.get(
+                path='contacts',
+                params='offset={}&limit={}'.format(offset, limit),
+                endpoint='contacts')
+            contacts = (data or {}).get('contacts', [])
+            for contact in contacts:
+                total += self.sync(
+                    client=self.client,
+                    catalog=catalog,
+                    state=state,
+                    start_date=start_date,
+                    path=self.path,
+                    selected_streams=[self.stream_name],
+                    parent=self.parent,
+                    parent_id=contact['id'])
+            if len(contacts) < limit:
+                break
+            offset += limit
+        return total
 
 class Goals(ActiveCampaign):
     """

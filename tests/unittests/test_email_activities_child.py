@@ -5,6 +5,7 @@ from singer.catalog import Catalog, CatalogEntry, Schema
 
 from tap_activecampaign.exceptions import ActiveCampaignNotFoundError
 from tap_activecampaign.schema import get_schemas
+from tap_activecampaign.sync import sync as tap_sync
 from tap_activecampaign.streams import (
     STREAMS,
     SUB_STREAMS,
@@ -60,7 +61,7 @@ class TestEmailActivitiesRegistration(unittest.TestCase):
         self.assertEqual(EmailActivities.parent, 'contacts')
         self.assertEqual(EmailActivities.parent_query_field, 'filters[subscriberid]')
         self.assertEqual(EmailActivities.replication_method, 'FULL_TABLE')
-        self.assertIn('email_activities', Contacts.children)
+        self.assertNotIn('email_activities', Contacts.children)
         self.assertEqual(SUB_STREAMS['contacts'], 'email_activities')
         self.assertIs(STREAMS['email_activities'], EmailActivities)
 
@@ -145,46 +146,80 @@ class TestEmailActivitiesSync(unittest.TestCase):
                     selected_streams=['tags'])
 
 
-class TestContactsSyncsEmailActivities(unittest.TestCase):
+class TestEmailActivitiesFullContactPass(unittest.TestCase):
 
-    def test_each_contact_is_queried_for_its_email_activities(self):
-        client = MagicMock()
-        client.base_url = 'https://example.api-us1.com/api/3/'
-        contacts = {
-            'contacts': [
-                {'id': '11', 'udate': '2026-01-01T00:00:00-05:00', 'cdate': '2026-01-01T00:00:00-05:00'},
-                {'id': '12', 'udate': '2026-01-02T00:00:00-05:00', 'cdate': '2026-01-02T00:00:00-05:00'},
-            ],
-            'meta': {'total': '2'},
-        }
-        client.get.side_effect = lambda path, params=None, endpoint=None: (
-            contacts if path == 'contacts' else {'emailActivities': [], 'meta': {'total': '0'}})
+    def setUp(self):
+        self.client = MagicMock()
+        self.client.base_url = 'https://example.api-us1.com/api/3/'
 
-        schemas, field_metadata = get_schemas()
-        entries = []
-        for name in ('contacts', 'email_activities'):
-            mdata = field_metadata[name]
-            for entry in mdata:
-                entry['metadata']['selected'] = True
-            entries.append(CatalogEntry(
-                stream=name, tap_stream_id=name, key_properties=['id'],
-                schema=Schema.from_dict(schemas[name]), metadata=mdata))
+    def _run(self, contact_pages):
+        """contact_pages: list of contact-id lists, one per /contacts page."""
+        pages = iter(contact_pages)
 
+        def fake_get(path, params=None, endpoint=None):
+            if path == 'contacts':
+                return {'contacts': [{'id': str(i)} for i in next(pages)]}
+            return {'emailActivities': [], 'meta': {'total': '0'}}
+
+        self.client.get.side_effect = fake_get
         with patch('singer.write_schema'), patch('singer.messages.write_record'), \
                 patch('singer.write_state'):
-            Contacts(client).sync(
-                client=client,
-                catalog=Catalog(entries),
-                state={},
-                start_date=START_DATE,
-                path='contacts',
-                selected_streams=['contacts', 'email_activities'])
+            return EmailActivities(self.client).sync_for_all_contacts(
+                _catalog_for('email_activities'), {}, START_DATE)
 
-        child_queries = [c.kwargs['params'] for c in client.get.call_args_list
-                         if c.kwargs['path'] == 'emailActivities']
-        self.assertEqual(len(child_queries), 2)
-        self.assertIn('filters[subscriberid]=11', child_queries[0])
-        self.assertIn('filters[subscriberid]=12', child_queries[1])
+    def _contact_calls(self):
+        return [c.kwargs['params'] for c in self.client.get.call_args_list
+                if c.kwargs['path'] == 'contacts']
+
+    def _email_calls(self):
+        return [c.kwargs['params'] for c in self.client.get.call_args_list
+                if c.kwargs['path'] == 'emailActivities']
+
+    def test_every_contact_is_queried_without_updated_after_filter(self):
+        self._run([[11, 12]])
+
+        emails = self._email_calls()
+        self.assertEqual(len(emails), 2)
+        self.assertIn('filters[subscriberid]=11', emails[0])
+        self.assertIn('filters[subscriberid]=12', emails[1])
+        for params in self._contact_calls():
+            self.assertNotIn('updated_after', params)
+
+    def test_contacts_are_paginated(self):
+        self._run([list(range(1, 101)), [101, 102]])
+
+        self.assertEqual(len(self._contact_calls()), 2)
+        self.assertIn('offset=100', self._contact_calls()[1])
+        self.assertEqual(len(self._email_calls()), 102)
+
+    def test_no_contacts(self):
+        self.assertEqual(self._run([[]]), 0)
+        self.assertEqual(self._email_calls(), [])
+
+
+class TestSyncEntryPoint(unittest.TestCase):
+
+    def _run_sync(self, selected):
+        catalog = MagicMock()
+        catalog.get_selected_streams.return_value = [MagicMock(stream=s) for s in selected]
+        with patch('tap_activecampaign.sync.EmailActivities') as email_cls, \
+                patch('tap_activecampaign.sync.update_currently_syncing'), \
+                patch.dict('tap_activecampaign.sync.STREAMS', {'contacts': MagicMock()}):
+            email_cls.return_value.sync_for_all_contacts.return_value = 0
+            tap_sync(MagicMock(), {'start_date': START_DATE}, catalog, {})
+        return email_cls
+
+    def test_runs_when_parent_not_selected(self):
+        email_cls = self._run_sync(['email_activities'])
+        email_cls.return_value.sync_for_all_contacts.assert_called_once()
+
+    def test_runs_once_when_parent_selected(self):
+        email_cls = self._run_sync(['contacts', 'email_activities'])
+        email_cls.return_value.sync_for_all_contacts.assert_called_once()
+
+    def test_skipped_when_not_selected(self):
+        email_cls = self._run_sync(['contacts'])
+        email_cls.return_value.sync_for_all_contacts.assert_not_called()
 
 
 if __name__ == '__main__':
