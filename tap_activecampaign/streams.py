@@ -587,7 +587,6 @@ class Contacts(ActiveCampaign):
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
 
 
-
 class ContactAutomations(ActiveCampaign):
     """
     Get data for contactAutomations.
