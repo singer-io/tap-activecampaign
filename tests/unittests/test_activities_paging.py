@@ -111,6 +111,21 @@ class TestActivitiesUnstablePaging(unittest.TestCase):
         written_ids = {c.args[1]['id'] for c in write_record.call_args_list}
         self.assertTrue(set(range(131, 141)) <= written_ids)
 
+    def test_ids_are_not_retained_during_the_unfiltered_re_read(self):
+        filtered = [_page(range(1, 101), 140), _page(range(91, 131), 140)]
+        unfiltered = [_page(range(1, 101), 140), _page(range(101, 141), 140)]
+        self.client.get.side_effect = _fake_get(filtered, unfiltered)
+        stream = Activities(self.client)
+
+        with patch('singer.messages.write_record'), patch('singer.write_state'):
+            stream.sync(
+                client=self.client, catalog=_catalog(), state={}, start_date=START_DATE,
+                path=stream.path, selected_streams=['activities'])
+
+        # Counters restart for the re-read and must stay empty while the filter is off.
+        self.assertEqual(stream._rows_seen, 0)
+        self.assertEqual(stream._ids_seen, set())
+
 
 if __name__ == '__main__':
     unittest.main()

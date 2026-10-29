@@ -929,9 +929,11 @@ class Activities(ActiveCampaign):
         return total
 
     def process_records(self, catalog, stream_name, records, **kwargs):
-        for record in records:
-            self._rows_seen += 1
-            self._ids_seen.add(record.get('id'))
+        # Only the filtered pass needs the check; the unfiltered re-read spans the whole history.
+        if self.bookmark_query_field:
+            for record in records:
+                self._rows_seen += 1
+                self._ids_seen.add(record.get('id'))
         return super().process_records(catalog, stream_name, records, **kwargs)
 
     def write_bookmark(self, state, stream, value):
