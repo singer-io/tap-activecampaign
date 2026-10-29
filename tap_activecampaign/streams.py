@@ -3,7 +3,11 @@ from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
 from tap_activecampaign.transform import transform_json
 from tap_activecampaign.client import ActiveCampaignClient
-from tap_activecampaign.exceptions import ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError
+from tap_activecampaign.exceptions import (
+    ActiveCampaignForbiddenError,
+    ActiveCampaignNotFoundError,
+    ActiveCampaignUnauthorizedError,
+)
 
 LOGGER = singer.get_logger()
 # streams: API URL endpoints to be called
@@ -20,6 +24,7 @@ LOGGER = singer.get_logger()
 #   bookmark_type: Data type for bookmark, integer or datetime
 #   children: A collection of child endpoints (where the endpoint path includes the parent id)
 #   parent: On each of the children, the singular stream name for parent element
+#   parent_query_field: On a child, the query param that carries the parent id (instead of a path placeholder)
 
 class ActiveCampaign:
     """
@@ -35,6 +40,7 @@ class ActiveCampaign:
     path = None
     params = {}
     parent = None
+    parent_query_field = None
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
@@ -241,6 +247,9 @@ class ActiveCampaign:
             if bookmark_query_field:
                 params[bookmark_query_field] = last_datetime
 
+            if self.parent_query_field:
+                params[self.parent_query_field] = parent_id
+
             # Need URL querystring for 1st page; subsequent pages provided by next_url
             # querystring: Squash query params into string
             querystring = None
@@ -356,10 +365,18 @@ class ActiveCampaign:
 
         # API request data
         data = {}
-        data = self.client.get(
-            path=path,
-            params=querystring,
-            endpoint=self.stream_name)
+        try:
+            data = self.client.get(
+                path=path,
+                params=querystring,
+                endpoint=self.stream_name)
+        except ActiveCampaignNotFoundError:
+            if not self.parent_query_field:
+                raise
+            # Parent record was deleted mid-sync; treat as having no child records.
+            LOGGER.warning('Stream: {}, parent_id: {} not found, skipping'.format(
+                self.stream_name, parent_id))
+            return endpoint_total, 0, 0, page, offset + limit, max_bookmark_value
 
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
@@ -416,6 +433,10 @@ class ActiveCampaign:
             # Get pagination details
             total_count = data.get('meta', {}).get('total') or 0
             api_total = int(total_count)
+
+            # A short page is the last page, whatever meta.total reports for a filtered call.
+            if self.parent_query_field and len(transformed_data) < limit:
+                api_total = 0
 
             if api_total == 0:
                 total_records = record_count
@@ -564,6 +585,7 @@ class Contacts(ActiveCampaign):
     created_timestamp = 'created_timestamp'
     bookmark_query_field = 'filters[updated_after]'
     links = ['contactGoals', 'contactLogs', 'geoIps', 'trackingLogs']
+    children = ['email_activities']
 
 
 class ContactAutomations(ActiveCampaign):
@@ -1030,11 +1052,16 @@ class EcommerceOrderActivities(ActiveCampaign):
 class EmailActivities(ActiveCampaign):
     """
     Get data for email_activities.
+    The unfiltered endpoint only returns emails already imported for a contact; requesting
+    filters[subscriberid] triggers that import, so the stream is fetched per contact.
+    Reference : https://developers.activecampaign.com/reference/list-all-email-activities
     """
     stream_name = 'email_activities'
     replication_method = 'FULL_TABLE'
     path = 'emailActivities'
     data_key = 'emailActivities'
+    parent = 'contacts'
+    parent_query_field = 'filters[subscriberid]'
 
 class Goals(ActiveCampaign):
     """
@@ -1126,7 +1153,8 @@ STREAMS = {
 }
 
 SUB_STREAMS = {
-    'ecommerce_orders': 'ecommerce_order_products'
+    'ecommerce_orders': 'ecommerce_order_products',
+    'contacts': 'email_activities'
 }
 
 def flatten_streams():
