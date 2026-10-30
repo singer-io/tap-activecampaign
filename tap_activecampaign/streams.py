@@ -908,12 +908,61 @@ class Webhooks(ActiveCampaign):
 class Activities(ActiveCampaign):
     """
     Get data for activities.
+    Offset paging with the `after` filter can return duplicate rows and skip others (the API sorts
+    by tstamp without a tie-breaker). Duplicates in a response therefore mean records were missed,
+    and the stream is re-read without `after`, which pages consistently. Records already written by
+    the filtered pass are not written again.
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
     path = 'activities'
     data_key = 'activities'
     bookmark_query_field = 'after'
+
+    def sync(self, client, catalog, state, start_date, path, selected_streams=None, parent=None, parent_id=None):
+        self._rows_seen = 0
+        self._ids_seen = set()
+        self._written_ids = set()
+        self._pending_bookmark = None
+
+        total = super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
+
+        if self.bookmark_query_field and len(self._ids_seen) < self._rows_seen:
+            LOGGER.warning(
+                'Stream: %s, %s of %s rows returned with the "%s" filter were duplicates, so records were '
+                'skipped. Re-reading without the filter.',
+                self.stream_name, self._rows_seen - len(self._ids_seen), self._rows_seen,
+                self.bookmark_query_field)
+            self.bookmark_query_field = None
+            self._written_ids = self._ids_seen
+            self._rows_seen = 0
+            self._ids_seen = set()
+            total += super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
+
+        if self._pending_bookmark is not None:
+            super().write_bookmark(state, self.stream_name, self._pending_bookmark)
+        return total
+
+    def process_records(self, catalog, stream_name, records, **kwargs):
+        if self.bookmark_query_field:
+            # Count every row for the duplicate check, but write each id only once.
+            fresh = []
+            for record in records:
+                self._rows_seen += 1
+                if record.get('id') not in self._ids_seen:
+                    fresh.append(record)
+                self._ids_seen.add(record.get('id'))
+            records = fresh
+        else:
+            records = [record for record in records if record.get('id') not in self._written_ids]
+        return super().process_records(catalog, stream_name, records, **kwargs)
+
+    def write_bookmark(self, state, stream, value):
+        # Held back until the response is known to be complete, so a skipped record never sits behind a saved bookmark.
+        # The re-read skips records the filtered pass wrote, so keep the higher of the two passes.
+        if self._pending_bookmark is None or \
+                self.transform_datetime(value) > self.transform_datetime(self._pending_bookmark):
+            self._pending_bookmark = value
 
 class AutomationBlocks(ActiveCampaign):
     """
