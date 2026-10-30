@@ -22,9 +22,13 @@ def _catalog():
         metadata=mdata)])
 
 
-def _page(ids, total):
+def _page(ids, total, tstamps=None):
+    tstamps = tstamps or {}
     return {
-        'activities': [{'id': str(i), 'tstamp': '2026-06-{:02d}T00:00:00-05:00'.format(i % 28 + 1)} for i in ids],
+        'activities': [
+            {'id': str(i), 'tstamp': tstamps.get(i, '2026-06-{:02d}T00:00:00-05:00'.format(i % 28 + 1))}
+            for i in ids
+        ],
         'meta': {'total': str(total)},
     }
 
@@ -110,6 +114,31 @@ class TestActivitiesUnstablePaging(unittest.TestCase):
 
         written_ids = {c.args[1]['id'] for c in write_record.call_args_list}
         self.assertTrue(set(range(131, 141)) <= written_ids)
+
+    def test_each_record_is_written_once_across_both_passes(self):
+        # Ids 91-100 repeat in the filtered pass, and ids 1-130 were already written before the re-read.
+        filtered = [_page(range(1, 101), 140), _page(range(91, 131), 140)]
+        unfiltered = [_page(range(1, 101), 140), _page(range(101, 141), 140)]
+        self.client.get.side_effect = _fake_get(filtered, unfiltered)
+
+        total, write_record, _ = self._sync()
+
+        written_ids = [c.args[1]['id'] for c in write_record.call_args_list]
+        self.assertEqual(len(written_ids), 140)
+        self.assertEqual(set(written_ids), set(range(1, 141)))
+        self.assertEqual(total, 140)
+
+    def test_bookmark_is_the_highest_across_both_passes(self):
+        # The newest record (id 5) is written by the filtered pass and skipped in the re-read.
+        newest = {5: '2026-06-30T12:00:00-05:00'}
+        filtered = [_page(range(1, 101), 140, newest), _page(range(91, 131), 140)]
+        unfiltered = [_page(range(1, 101), 140, newest), _page(range(101, 141), 140)]
+        self.client.get.side_effect = _fake_get(filtered, unfiltered)
+
+        _, _, write_state = self._sync()
+
+        state = write_state.call_args.args[0]
+        self.assertEqual(state['bookmarks']['activities'], '2026-06-30T17:00:00.000000Z')
 
     def test_ids_are_not_retained_during_the_unfiltered_re_read(self):
         filtered = [_page(range(1, 101), 140), _page(range(91, 131), 140)]
