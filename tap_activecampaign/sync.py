@@ -1,7 +1,7 @@
 
 import singer
 
-from tap_activecampaign.streams import STREAMS, SUB_STREAMS
+from tap_activecampaign.streams import STREAMS, SUB_STREAMS, EmailActivities
 
 LOGGER = singer.get_logger()
 
@@ -56,3 +56,11 @@ def sync(client, config, catalog, state):
         LOGGER.info('FINISHED Syncing: {}, total_records: {}'.format(
             stream_name,
             total_records))
+
+    # email_activities is not synced by its parent stream: every contact is requested on each sync
+    if 'email_activities' in selected_streams:
+        LOGGER.info('START Syncing: email_activities')
+        update_currently_syncing(state, 'email_activities')
+        total_records = EmailActivities(client).sync_for_all_contacts(catalog, state, start_date)
+        update_currently_syncing(state, None)
+        LOGGER.info('FINISHED Syncing: email_activities, total_records: {}'.format(total_records))

@@ -211,10 +211,11 @@ This tap:
 - Transformations: camelCase to snake_case, remove links node
 
 [email_activities](https://developers.activecampaign.com/reference/list-all-email-activities)
-- Endpoint: https://{subdomain}.api-us1.com/emailActivities
+- Endpoint: https://{subdomain}.api-us1.com/emailActivities?filters[subscriberid]={contact_id}
 - Data key: emailActivities
 - Primary keys: id
 - Replication strategy: Full Table
+- Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected)
 - Transformations: camelCase to snake_case, remove links node
 
 ## Authentication

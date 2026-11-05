@@ -24,3 +24,4 @@ htmlcov/
 .tox/
 .coverage
 .coverage.*
+tmp/
