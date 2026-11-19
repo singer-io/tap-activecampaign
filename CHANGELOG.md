@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.8.0
+  * Request email_activities for every contact only in a periodic full sweep (`email_activities_full_sweep_days`, default 7) and, in between, only for contacts updated or with new activities since the last sync, so run time and volume no longer scale with the contact count on every sync [#60](https://github.com/singer-io/tap-activecampaign/pull/60)
+  * Checkpoint the full sweep in state so an interrupted sync resumes from the last contact instead of restarting and re-emitting records [#60](https://github.com/singer-io/tap-activecampaign/pull/60)
+
 ## 1.7.0
   * Sync email_activities per contact using `filters[subscriberid]`, requesting every contact on each sync, so that all email history is returned [#58](https://github.com/singer-io/tap-activecampaign/pull/58)
   * Re-read the activities stream without the `after` filter when offset paging returns duplicate rows, which means records were skipped [#59](https://github.com/singer-io/tap-activecampaign/pull/59)

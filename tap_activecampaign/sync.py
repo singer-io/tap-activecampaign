@@ -57,10 +57,11 @@ def sync(client, config, catalog, state):
             stream_name,
             total_records))
 
-    # email_activities is not synced by its parent stream: every contact is requested on each sync
+    # email_activities is not synced by its parent stream: it sweeps contacts on its own schedule
     if 'email_activities' in selected_streams:
         LOGGER.info('START Syncing: email_activities')
         update_currently_syncing(state, 'email_activities')
-        total_records = EmailActivities(client).sync_for_all_contacts(catalog, state, start_date)
+        total_records = EmailActivities(client).sync_for_all_contacts(
+            catalog, state, start_date, config.get('email_activities_full_sweep_days'))
         update_currently_syncing(state, None)
         LOGGER.info('FINISHED Syncing: email_activities, total_records: {}'.format(total_records))
