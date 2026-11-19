@@ -215,7 +215,9 @@ This tap:
 - Data key: emailActivities
 - Primary keys: id
 - Replication strategy: Full Table
-- Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected)
+- Parent stream: contacts (does not require contacts to be selected)
+- Requesting `filters[subscriberid]` imports the contact's emails, so the stream is fetched per contact
+- Contact sweep: every contact is requested in a full sweep on the first sync and then once every `email_activities_full_sweep_days` days (default 7; `0` = every sync). Between full sweeps only contacts updated, or with new `activities`, since the previous sync are requested. If the activities lookup is unavailable, a full sweep runs instead. Activities offset paging can skip rows, so a contact it misses is picked up by the next full sweep. An interrupted full sweep resumes from the last contact checkpointed in state (`bookmarks.email_activities_sweep`)
 - Transformations: camelCase to snake_case, remove links node
 
 ## Authentication
@@ -256,6 +258,8 @@ This tap:
         "user_agent": "tap-activecampaign <api_user_email@your_company.com>"
       }
     ```
+
+    Optional: `email_activities_full_sweep_days` (default `7`) sets how often every contact is re-requested for `email_activities`; `0` requests every contact on every sync.
     
     Optionally, also create a `state.json` file. `currently_syncing` is an optional attribute used for identifying the last object to be synced in case the job is interrupted mid-stream. The next run would begin where the last job left off.
 

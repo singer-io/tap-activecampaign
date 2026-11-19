@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import singer
 from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
@@ -10,6 +12,12 @@ from tap_activecampaign.exceptions import (
 )
 
 LOGGER = singer.get_logger()
+
+# State key and tuning for the email_activities contact sweep
+SWEEP_STATE_KEY = 'email_activities_sweep'
+DEFAULT_FULL_SWEEP_DAYS = 7
+SWEEP_OVERLAP = timedelta(hours=1)
+
 # streams: API URL endpoints to be called
 # properties:
 #   <root node>: Plural stream name for the endpoint
@@ -1123,39 +1131,135 @@ class EmailActivities(ActiveCampaign):
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
 
-    def sync_for_all_contacts(self, catalog, state, start_date):
+    def sync_for_all_contacts(self, catalog, state, start_date, full_sweep_days=None):
         """
-        Request email activities for every contact, not only those changed since the last sync,
-        because new emails do not change the contact's udate.
+        Request email activities per contact. New emails do not change the contact's udate, so a
+        full sweep of every contact runs when there is no previous sweep or the last one is older
+        than `full_sweep_days` (0 = every sync). Between full sweeps only contacts updated or with
+        new activities since the last pass are requested. An interrupted full sweep resumes at the
+        last contact id checkpointed in state.
         """
+        full_sweep_days = DEFAULT_FULL_SWEEP_DAYS if full_sweep_days is None else float(full_sweep_days)
         self.write_schema(catalog, self.stream_name)
-        total = 0
-        last_id = 0
+        sweep = state.setdefault('bookmarks', {}).setdefault(SWEEP_STATE_KEY, {})
+
+        if sweep.get('resume_contact_id') is not None:
+            started = strptime_to_utc(sweep['full_sweep_started'])
+            LOGGER.info('Stream: {}, resuming full sweep from contact id {}'.format(
+                self.stream_name, sweep['resume_contact_id']))
+            return self._full_sweep(catalog, state, start_date, sweep, started, sweep['resume_contact_id'])
+
+        started = utils.now()
+        since = self._incremental_since(sweep, started, full_sweep_days)
+        contact_ids = self._changed_contact_ids(since) if since else None
+        if contact_ids is None:
+            return self._full_sweep(catalog, state, start_date, sweep, started, 0)
+
+        LOGGER.info('Stream: {}, incremental pass for {} contacts changed since {}'.format(
+            self.stream_name, len(contact_ids), since))
+        total = self._sync_contacts(catalog, state, start_date, sorted(contact_ids))
+        sweep['last_sync'] = utils.strftime(started)
+        singer.write_state(state)
+        return total
+
+    @staticmethod
+    def _incremental_since(sweep, now, full_sweep_days):
+        """Return the query timestamp for an incremental pass, or None when a full sweep is due."""
+        if full_sweep_days <= 0 or not sweep.get('last_full_sweep') or not sweep.get('last_sync'):
+            return None
+        if now - strptime_to_utc(sweep['last_full_sweep']) >= timedelta(days=full_sweep_days):
+            return None
+        return utils.strftime(strptime_to_utc(sweep['last_sync']) - SWEEP_OVERLAP)
+
+    def _contact_pages(self, last_id=0, updated_after=None):
+        """Yield lists of contact ids in id order, using keyset paging."""
         limit = 100
         while True:
             # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
-            data = self.client.get(
-                path='contacts',
-                params='limit={}&orders[id]=ASC&id_greater={}'.format(limit, last_id),
-                endpoint='contacts')
+            params = 'limit={}&orders[id]=ASC&id_greater={}'.format(limit, last_id)
+            if updated_after:
+                params += '&filters[updated_after]={}'.format(updated_after)
+            data = self.client.get(path='contacts', params=params, endpoint='contacts')
             contacts = data.get('contacts') if isinstance(data, dict) else None
             if not isinstance(contacts, list):
                 raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
             if contacts and int(contacts[-1]['id']) <= last_id:
                 raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
-            for contact in contacts:
-                total += self.sync(
-                    client=self.client,
-                    catalog=catalog,
-                    state=state,
-                    start_date=start_date,
-                    path=self.path,
-                    selected_streams=[self.stream_name],
-                    parent=self.parent,
-                    parent_id=contact['id'])
+            yield [contact['id'] for contact in contacts]
             if len(contacts) < limit:
-                break
+                return
             last_id = int(contacts[-1]['id'])
+
+    def _changed_contact_ids(self, since):
+        """
+        Contacts updated, or with new contact activity, since `since`. Returns None when activities
+        are not accessible, so the caller falls back to a full sweep. Offset paging of activities
+        can skip rows (the API has no id tie-breaker), so a contact it misses is picked up by the
+        next full sweep.
+        """
+        contact_ids = {int(i) for page in self._contact_pages(updated_after=since) for i in page}
+
+        limit = 100
+        offset = 0
+        rows = 0
+        activity_ids = set()
+        while True:
+            try:
+                data = self.client.get(
+                    path='activities',
+                    params='limit={}&offset={}&after={}&orders[tstamp]=ASC'.format(limit, offset, since),
+                    endpoint='activities')
+            except (ActiveCampaignForbiddenError, ActiveCampaignUnauthorizedError):
+                LOGGER.warning('Stream: {}, activities not accessible, running a full sweep'.format(
+                    self.stream_name))
+                return None
+            activities = data.get('activities') if isinstance(data, dict) else None
+            if not isinstance(activities, list):
+                raise RuntimeError('Malformed activities response at offset {}: {}'.format(offset, data))
+            new_ids = {activity.get('id') for activity in activities} - activity_ids
+            rows += len(activities)
+            activity_ids |= new_ids
+            for activity in activities:
+                if str(activity.get('subscriberid') or '0') != '0':
+                    contact_ids.add(int(activity['subscriberid']))
+            if len(activities) < limit:
+                break
+            if not new_ids:
+                LOGGER.warning('Stream: {}, activities page at offset {} had no new rows, stopping'.format(
+                    self.stream_name, offset))
+                break
+            offset += limit
+        if len(activity_ids) < rows:
+            LOGGER.info('Stream: {}, activities paging returned {} duplicate rows'.format(
+                self.stream_name, rows - len(activity_ids)))
+        return contact_ids
+
+    def _sync_contacts(self, catalog, state, start_date, contact_ids):
+        total = 0
+        for contact_id in contact_ids:
+            total += self.sync(
+                client=self.client,
+                catalog=catalog,
+                state=state,
+                start_date=start_date,
+                path=self.path,
+                selected_streams=[self.stream_name],
+                parent=self.parent,
+                parent_id=contact_id)
+        return total
+
+    def _full_sweep(self, catalog, state, start_date, sweep, started, last_id):
+        total = 0
+        for page in self._contact_pages(last_id=last_id):
+            total += self._sync_contacts(catalog, state, start_date, page)
+            if page:
+                sweep['full_sweep_started'] = utils.strftime(started)
+                sweep['resume_contact_id'] = int(page[-1])
+                singer.write_state(state)
+        sweep.pop('full_sweep_started', None)
+        sweep.pop('resume_contact_id', None)
+        sweep['last_full_sweep'] = sweep['last_sync'] = utils.strftime(started)
+        singer.write_state(state)
         return total
 
 class Goals(ActiveCampaign):
