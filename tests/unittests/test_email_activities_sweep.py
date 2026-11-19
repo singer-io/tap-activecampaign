@@ -220,7 +220,3 @@ class TestEmailActivitiesSweep(unittest.TestCase):
                     _catalog_for('email_activities'), state, START_DATE)
 
         self.assertEqual(state['bookmarks'][KEY]['last_sync'], last_sync)
-
-
-if __name__ == '__main__':
-    unittest.main()
