@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import singer
@@ -19,7 +20,29 @@ SWEEP_STATE_KEY = 'email_activities_sweep'
 DEFAULT_FULL_SWEEP_DAYS = 7
 # A full sweep of a large account takes days; capping each sync keeps other streams from going stale.
 DEFAULT_MAX_RUNTIME_MINUTES = 240
+# One-at-a-time requests average ~1.7/s against the 5/s API limit, which the client enforces across threads.
+DEFAULT_WORKERS = 4
+CONTACT_BATCH = 100
 SWEEP_OVERLAP = timedelta(hours=1)
+
+
+class _PrefetchedClient:
+    """Serves first-page responses fetched in parallel; any other request goes to the real client."""
+
+    def __init__(self, client, responses):
+        self._client = client
+        self._responses = responses
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def get(self, path, **kwargs):
+        result = self._responses.pop(kwargs.get('params'), None)
+        if result is None:
+            return self._client.get(path=path, **kwargs)
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 # streams: API URL endpoints to be called
 # properties:
@@ -1133,16 +1156,20 @@ class EmailActivities(ActiveCampaign):
     data_key = 'emailActivities'
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
+    workers = DEFAULT_WORKERS
 
-    def sync_for_all_contacts(self, catalog, state, start_date, full_sweep_days=None, max_runtime_minutes=None):
+    def sync_for_all_contacts(self, catalog, state, start_date, full_sweep_days=None, max_runtime_minutes=None,
+                              workers=None):
         """
         Request email activities per contact. New emails do not change the contact's udate, so a
         full sweep of every contact runs when there is no previous sweep or the last one is older
         than `full_sweep_days` (0 = every sync). Between full sweeps only contacts updated or with
         new activities since the last pass are requested. A full sweep stops after
         `max_runtime_minutes` (0 = no limit) and, like an interrupted one, resumes at the last
-        contact id checkpointed in state.
+        contact id checkpointed in state. Contacts are requested by `workers` threads (1 = one at a time).
         """
+        if workers is not None:
+            self.workers = int(workers)
         full_sweep_days = DEFAULT_FULL_SWEEP_DAYS if full_sweep_days is None else float(full_sweep_days)
         if max_runtime_minutes is None:
             max_runtime_minutes = DEFAULT_MAX_RUNTIME_MINUTES
@@ -1242,18 +1269,47 @@ class EmailActivities(ActiveCampaign):
                 self.stream_name, rows - len(activity_ids)))
         return contact_ids
 
+    def _first_page_params(self, contact_id):
+        # Must match the query string `sync` builds for a contact's first page, or the prefetch is unused.
+        params = {'offset': 0, 'limit': 100, **self.params, self.parent_query_field: contact_id}
+        return '&'.join('%s=%s' % (key, value) for key, value in params.items())
+
+    def _prefetch(self, contact_ids):
+        """Fetch each contact's first page in parallel; processing and writing stay in order on one thread."""
+        if self.workers <= 1 or len(contact_ids) < 2:
+            return self.client
+
+        def fetch(params):
+            try:
+                return self.client.get(path=self.path, params=params, endpoint=self.stream_name)
+            except Exception as err:  # pylint: disable=broad-except
+                return err  # re-raised in contact order by _PrefetchedClient
+
+        all_params = [self._first_page_params(contact_id) for contact_id in contact_ids]
+        with ThreadPoolExecutor(max_workers=self.workers) as pool:
+            responses = dict(zip(all_params, pool.map(fetch, all_params)))
+        return _PrefetchedClient(self.client, responses)
+
     def _sync_contacts(self, catalog, state, start_date, contact_ids):
         total = 0
-        for contact_id in contact_ids:
-            total += self.sync(
-                client=self.client,
-                catalog=catalog,
-                state=state,
-                start_date=start_date,
-                path=self.path,
-                selected_streams=[self.stream_name],
-                parent=self.parent,
-                parent_id=contact_id)
+        contact_ids = list(contact_ids)
+        real_client = self.client
+        for offset in range(0, len(contact_ids), CONTACT_BATCH):
+            batch = contact_ids[offset:offset + CONTACT_BATCH]
+            self.client = self._prefetch(batch)
+            try:
+                for contact_id in batch:
+                    total += self.sync(
+                        client=self.client,
+                        catalog=catalog,
+                        state=state,
+                        start_date=start_date,
+                        path=self.path,
+                        selected_streams=[self.stream_name],
+                        parent=self.parent,
+                        parent_id=contact_id)
+            finally:
+                self.client = real_client
         return total
 
     def _full_sweep(self, catalog, state, start_date, sweep, started, last_id, deadline=None):

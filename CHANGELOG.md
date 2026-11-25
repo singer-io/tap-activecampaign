@@ -1,6 +1,7 @@
 # Changelog
 
 ## 1.8.1
+  * Request the contacts of an email_activities sweep with `email_activities_workers` parallel workers (default 4; `1` = one at a time) within the API's 5 requests/second limit, which is now enforced safely across threads
   * Stop the email_activities full sweep after `email_activities_max_runtime_minutes` (default 240; `0` = no limit) and continue it on the next sync, so a long first sweep no longer keeps the other streams from syncing
 
 ## 1.8.0

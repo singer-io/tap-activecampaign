@@ -63,6 +63,6 @@ def sync(client, config, catalog, state):
         update_currently_syncing(state, 'email_activities')
         total_records = EmailActivities(client).sync_for_all_contacts(
             catalog, state, start_date, config.get('email_activities_full_sweep_days'),
-            config.get('email_activities_max_runtime_minutes'))
+            config.get('email_activities_max_runtime_minutes'), config.get('email_activities_workers'))
         update_currently_syncing(state, None)
         LOGGER.info('FINISHED Syncing: email_activities, total_records: {}'.format(total_records))

@@ -1,9 +1,12 @@
 import backoff
 import ipaddress
+import threading
+import time
+from collections import deque
 from urllib.parse import urlparse
 import socket
 import requests
-from singer import metrics, utils
+from singer import metrics
 import singer
 
 from tap_activecampaign.exceptions import (
@@ -25,6 +28,30 @@ LOGGER = singer.get_logger()
 REQUEST_TIMEOUT = 300
 
 DEFAULT_API_VERSION = '3'
+
+
+class RateLimiter:
+    """Allow `limit` request starts per `every` seconds across threads."""
+
+    def __init__(self, limit, every):
+        self._every = every
+        self._starts = deque(maxlen=limit)
+        self._lock = threading.Lock()
+
+    def wait(self):
+        # singer's utils.ratelimit is not thread-safe, and parallel contact requests share the limit.
+        with self._lock:
+            now = time.monotonic()
+            start = now
+            if len(self._starts) == self._starts.maxlen:
+                start = max(now, self._starts[0] + self._every)
+            self._starts.append(start)
+        if start > now:
+            time.sleep(start - now)
+
+
+# Rate limit: https://developers.activecampaign.com/reference#rate-limits
+REQUEST_LIMITER = RateLimiter(5, 1)
 
 def should_retry_error(exception):
     """
@@ -175,9 +202,8 @@ class ActiveCampaignClient(object):
                           giveup=lambda e: not should_retry_error(e),
                           max_tries=5,
                           factor=2)
-    # Rate limit: https://developers.activecampaign.com/reference#rate-limits
-    @utils.ratelimit(5, 1)
     def request(self, method, path=None, url=None, api_version=None, **kwargs):
+        REQUEST_LIMITER.wait()
         if not self.__verified:
             self.__verified = self.check_api_token()
 

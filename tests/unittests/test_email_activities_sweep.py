@@ -68,7 +68,9 @@ class TestEmailActivitiesSweep(unittest.TestCase):
         return [c.kwargs['params'] for c in self.client.get.call_args_list if c.kwargs['path'] == path]
 
     def _requested_contacts(self):
-        return [int(p.split('filters[subscriberid]=')[1].split('&')[0]) for p in self._calls('emailActivities')]
+        # Sorted: contacts of one page are requested in parallel, so call order is not fixed.
+        return sorted(int(p.split('filters[subscriberid]=')[1].split('&')[0])
+                      for p in self._calls('emailActivities'))
 
     def test_first_run_is_a_full_sweep_and_records_it(self):
         state = {}
@@ -290,3 +292,133 @@ class TestEmailActivitiesSweep(unittest.TestCase):
 
         self.assertEqual(self._requested_contacts(), list(range(1, 201)))
         self.assertEqual(state['bookmarks'][KEY]['resume_contact_id'], 200)
+
+    def test_parallel_workers_request_each_contact_exactly_once(self):
+        self.all_contacts = list(range(1, 251))
+
+        self._run({}, workers=4)
+
+        # A duplicate request would mean the prefetched first page was not reused.
+        self.assertEqual(len(self._calls('emailActivities')), 250)
+        self.assertEqual(self._requested_contacts(), list(range(1, 251)))
+
+    def test_one_worker_requests_contacts_in_order(self):
+        self._run({}, workers=1)
+
+        requested = [int(p.split('filters[subscriberid]=')[1]) for p in self._calls('emailActivities')]
+        self.assertEqual(requested, [1, 2, 3, 4, 5])
+
+    def test_parallel_workers_process_contacts_in_order(self):
+        self.all_contacts = list(range(1, 41))
+        processed = []
+        real_sync = EmailActivities.sync
+
+        def spy(stream, *args, **kwargs):
+            processed.append(int(kwargs['parent_id']))
+            return real_sync(stream, *args, **kwargs)
+
+        with patch.object(EmailActivities, 'sync', spy):
+            self._run({}, workers=4)
+
+        self.assertEqual(processed, list(range(1, 41)))
+
+    def test_parallel_workers_skip_a_deleted_contact(self):
+        from tap_activecampaign.exceptions import ActiveCampaignNotFoundError
+        base = self._fake_get
+
+        def get(path, params=None, endpoint=None):
+            if path == 'emailActivities' and 'filters[subscriberid]=2' in params:
+                raise ActiveCampaignNotFoundError('404')
+            return base(path, params, endpoint)
+
+        self._fake_get = get
+        self._run({}, workers=3)
+
+        self.assertEqual(self._requested_contacts(), [1, 2, 3, 4, 5])
+
+    def test_parallel_workers_raise_an_error_at_its_contact_and_keep_earlier_work(self):
+        processed = []
+        real_sync = EmailActivities.sync
+        base = self._fake_get
+
+        def get(path, params=None, endpoint=None):
+            if path == 'emailActivities' and 'filters[subscriberid]=3' in params:
+                raise RuntimeError('boom')
+            return base(path, params, endpoint)
+
+        def spy(stream, *args, **kwargs):
+            processed.append(int(kwargs['parent_id']))
+            return real_sync(stream, *args, **kwargs)
+
+        self._fake_get = get
+        state = {}
+        with patch.object(EmailActivities, 'sync', spy), self.assertRaises(RuntimeError):
+            self._run(state, workers=3)
+
+        self.assertEqual(processed, [1, 2, 3])
+        self.assertNotIn('last_full_sweep', state['bookmarks'][KEY])
+
+    def test_parallel_workers_emit_the_same_records_in_the_same_order(self):
+        self.all_contacts = list(range(1, 31))
+        base = self._fake_get
+
+        def get(path, params=None, endpoint=None):
+            if path == 'emailActivities':
+                contact = params.split('filters[subscriberid]=')[1]
+                rows = [{'id': '{}{}'.format(contact, n), 'subscriberid': contact} for n in range(int(contact) % 4)]
+                return {'emailActivities': rows, 'meta': {'total': str(len(rows))}}
+            return base(path, params, endpoint)
+
+        self._fake_get = get
+        emitted = {}
+        for workers in (1, 4):
+            with patch('singer.write_schema'), patch('singer.write_state'), \
+                    patch('singer.messages.write_record') as write_record, \
+                    patch('singer.utils.now', return_value=NOW):
+                self.client.get.side_effect = self._fake_get
+                EmailActivities(self.client).sync_for_all_contacts(
+                    _catalog_for('email_activities'), {}, START_DATE, workers=workers)
+            emitted[workers] = [call.args[1]['id'] for call in write_record.call_args_list]
+
+        self.assertTrue(emitted[1])
+        self.assertEqual(emitted[4], emitted[1])
+
+    def test_stream_client_is_restored_after_parallel_sync(self):
+        stream = EmailActivities(self.client)
+        self.client.get.side_effect = self._fake_get
+
+        with patch('singer.write_schema'), patch('singer.messages.write_record'), \
+                patch('singer.write_state'), patch('singer.utils.now', return_value=NOW):
+            stream.sync_for_all_contacts(_catalog_for('email_activities'), {}, START_DATE, workers=3)
+
+        self.assertIs(stream.client, self.client)
+
+
+class TestRateLimiter(unittest.TestCase):
+
+    def test_limits_request_starts_across_threads(self):
+        import threading
+        from tap_activecampaign.client import RateLimiter
+
+        limiter = RateLimiter(5, 1)
+        sleeps = []
+        with patch('tap_activecampaign.client.time.monotonic', return_value=100.0), \
+                patch('tap_activecampaign.client.time.sleep', side_effect=sleeps.append):
+            threads = [threading.Thread(target=limiter.wait) for _ in range(12)]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+        # 5 may start immediately, the next 5 one second later, the last 2 two seconds later.
+        self.assertEqual(sorted(sleeps), [1.0] * 5 + [2.0] * 2)
+
+    def test_does_not_sleep_below_the_limit(self):
+        from tap_activecampaign.client import RateLimiter
+
+        limiter = RateLimiter(5, 1)
+        with patch('tap_activecampaign.client.time.sleep') as sleep:
+            for _ in range(5):
+                limiter.wait()
+
+        sleep.assert_not_called()

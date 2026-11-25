@@ -326,13 +326,13 @@ class TestSyncEntryPoint(unittest.TestCase):
         catalog = MagicMock()
         catalog.get_selected_streams.return_value = [MagicMock(stream='email_activities')]
         config = {'start_date': START_DATE, 'email_activities_full_sweep_days': 3,
-                  'email_activities_max_runtime_minutes': 30}
+                  'email_activities_max_runtime_minutes': 30, 'email_activities_workers': 2}
         with patch('tap_activecampaign.sync.EmailActivities') as email_cls, \
                 patch('tap_activecampaign.sync.update_currently_syncing'):
             email_cls.return_value.sync_for_all_contacts.return_value = 0
             tap_sync(MagicMock(), config, catalog, {})
 
-        email_cls.return_value.sync_for_all_contacts.assert_called_once_with(catalog, {}, START_DATE, 3, 30)
+        email_cls.return_value.sync_for_all_contacts.assert_called_once_with(catalog, {}, START_DATE, 3, 30, 2)
 
     def test_skipped_when_not_selected(self):
         email_cls = self._run_sync(['contacts'])
