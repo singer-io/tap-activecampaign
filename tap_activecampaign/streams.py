@@ -1168,10 +1168,11 @@ class EmailActivities(ActiveCampaign):
         `max_runtime_minutes` (0 = no limit) and, like an interrupted one, resumes at the last
         contact id checkpointed in state. Contacts are requested by `workers` threads (1 = one at a time).
         """
-        if workers is not None:
+        # Config values may arrive as empty strings, which mean "not set".
+        if workers not in (None, ''):
             self.workers = int(workers)
-        full_sweep_days = DEFAULT_FULL_SWEEP_DAYS if full_sweep_days is None else float(full_sweep_days)
-        if max_runtime_minutes is None:
+        full_sweep_days = DEFAULT_FULL_SWEEP_DAYS if full_sweep_days in (None, '') else float(full_sweep_days)
+        if max_runtime_minutes in (None, ''):
             max_runtime_minutes = DEFAULT_MAX_RUNTIME_MINUTES
         deadline = time.monotonic() + float(max_runtime_minutes) * 60 if float(max_runtime_minutes) > 0 else None
         self.write_schema(catalog, self.stream_name)

@@ -383,6 +383,14 @@ class TestEmailActivitiesSweep(unittest.TestCase):
         self.assertTrue(emitted[1])
         self.assertEqual(emitted[4], emitted[1])
 
+    def test_empty_string_settings_use_the_defaults(self):
+        state = {}
+
+        self._run(state, full_sweep_days='', max_runtime_minutes='', workers='')
+
+        self.assertEqual(self._requested_contacts(), [1, 2, 3, 4, 5])
+        self.assertIn('last_full_sweep', state['bookmarks'][KEY])
+
     def test_stream_client_is_restored_after_parallel_sync(self):
         stream = EmailActivities(self.client)
         self.client.get.side_effect = self._fake_get
