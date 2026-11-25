@@ -218,6 +218,15 @@ This tap:
 - Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected)
 - Transformations: camelCase to snake_case, remove links node
 
+[activities](https://developers.activecampaign.com/reference/list-all-activities)
+- Endpoint: https://{subdomain}.api-us1.com/activities?after={bookmark}
+- Data key: activities
+- Primary keys: id
+- Replication strategy: Incremental (`after` filter)
+  - Bookmark: tstamp
+- Paging with `after` can repeat and skip rows (many rows share one `tstamp`). When repeated rows are returned, the rows added since the previous sync are re-read without `after`, starting from the highest activity id kept in state (`bookmarks.activities_max_id`). Without that value the whole feed is re-read once.
+- Transformations: camelCase to snake_case, remove links node
+
 ## Authentication
 
 

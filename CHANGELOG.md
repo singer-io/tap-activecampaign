@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.7.1
+  * When the activities `after` paging returns duplicates, re-read only the rows added since the previous sync (from the highest activity id kept in state, found by binary search on the offset) instead of the whole activities history [#62](https://github.com/singer-io/tap-activecampaign/pull/62)
+
 ## 1.7.0
   * Sync email_activities per contact using `filters[subscriberid]`, requesting every contact on each sync, so that all email history is returned [#58](https://github.com/singer-io/tap-activecampaign/pull/58)
   * Re-read the activities stream without the `after` filter when offset paging returns duplicate rows, which means records were skipped [#59](https://github.com/singer-io/tap-activecampaign/pull/59)

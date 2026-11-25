@@ -44,6 +44,7 @@ class ActiveCampaign:
     data_key = None
     created_timestamp = None
     bookmark_query_field = None
+    start_offset = 0
     links = []
     children = []
 
@@ -232,9 +233,9 @@ class ActiveCampaign:
         # Each page has an offset (starting value) and a limit (batch size, number of records)
         # Increase the "offset" by the "limit" for each batch.
         # Continue until the "record_count" returned < "limit" is null/zero or 
-        offset = 0 # Starting offset value for each batch API call
+        offset = self.start_offset # Starting offset value for each batch API call
         limit = 100 # Batch size; Number of records per API call; Max = 100
-        total_records = 0 # Initialize total
+        total_records = offset # Initialize total
         record_count = limit # Initialize, reset for each API call
         page = 1
 
@@ -909,21 +910,28 @@ class Activities(ActiveCampaign):
     """
     Get data for activities.
     Offset paging with the `after` filter can return duplicate rows and skip others (the API sorts
-    by tstamp without a tie-breaker). Duplicates in a response therefore mean records were missed,
-    and the stream is re-read without `after`, which pages consistently. Records already written by
-    the filtered pass are not written again.
+    by tstamp without a tie-breaker, and many rows share one tstamp). Duplicates in a response
+    therefore mean records were missed, and the stream is re-read without `after`, which pages
+    consistently in id order. Records already written by the filtered pass are not written again.
+
+    The re-read only needs the rows added since the previous sync, so the highest id seen is kept in
+    state (`activities_max_id`) and the re-read starts at the first row with a higher id, found by
+    binary search on the offset. Without that state value, the whole feed is re-read once.
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
     path = 'activities'
     data_key = 'activities'
     bookmark_query_field = 'after'
+    max_id_state_key = 'activities_max_id'
 
     def sync(self, client, catalog, state, start_date, path, selected_streams=None, parent=None, parent_id=None):
         self._rows_seen = 0
         self._ids_seen = set()
         self._written_ids = set()
         self._pending_bookmark = None
+        self._max_id = None
+        previous_max_id = self._get_max_id(state)
 
         total = super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
 
@@ -937,13 +945,60 @@ class Activities(ActiveCampaign):
             self._written_ids = self._ids_seen
             self._rows_seen = 0
             self._ids_seen = set()
-            total += super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
+            self.start_offset = self._first_offset_after_id(previous_max_id)
+            if self.start_offset is None:
+                self.start_offset = 0
+            else:
+                total += super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
+            self.start_offset = 0
 
+        max_id = max(self._max_id or 0, previous_max_id or 0)
+        if max_id:
+            state.setdefault('bookmarks', {})[self.max_id_state_key] = max_id
         if self._pending_bookmark is not None:
             super().write_bookmark(state, self.stream_name, self._pending_bookmark)
+        elif max_id != (previous_max_id or 0):
+            singer.write_state(state)
         return total
 
+    def _get_max_id(self, state):
+        value = (state or {}).get('bookmarks', {}).get(self.max_id_state_key)
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _first_offset_after_id(self, last_id):
+        """
+        Return the offset of the first row with an id above `last_id` in the unfiltered feed (ids
+        ascend with the offset), or None when no row is newer. Returns 0 without a known `last_id`.
+        """
+        if not last_id:
+            return 0
+
+        def probe(offset):
+            return self.client.get(
+                path=self.path, params='limit=1&offset={}'.format(offset), endpoint=self.stream_name)
+
+        total = int((probe(0).get('meta') or {}).get('total') or 0)
+        low, high = 0, total
+        while low < high:
+            mid = (low + high) // 2
+            rows = probe(mid).get(self.data_key) or []
+            if rows and int(rows[0]['id']) <= last_id:
+                low = mid + 1
+            else:
+                high = mid
+        return low if low < total else None
+
     def process_records(self, catalog, stream_name, records, **kwargs):
+        for record in records:
+            try:
+                record_id = int(record.get('id'))
+            except (TypeError, ValueError):
+                continue
+            if self._max_id is None or record_id > self._max_id:
+                self._max_id = record_id
         if self.bookmark_query_field:
             # Count every row for the duplicate check, but write each id only once.
             fresh = []
