@@ -1,3 +1,4 @@
+import time
 from datetime import timedelta
 
 import singer
@@ -16,6 +17,8 @@ LOGGER = singer.get_logger()
 # State key and tuning for the email_activities contact sweep
 SWEEP_STATE_KEY = 'email_activities_sweep'
 DEFAULT_FULL_SWEEP_DAYS = 7
+# A full sweep of a large account takes days; capping each sync keeps other streams from going stale.
+DEFAULT_MAX_RUNTIME_MINUTES = 240
 SWEEP_OVERLAP = timedelta(hours=1)
 
 # streams: API URL endpoints to be called
@@ -1131,15 +1134,19 @@ class EmailActivities(ActiveCampaign):
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
 
-    def sync_for_all_contacts(self, catalog, state, start_date, full_sweep_days=None):
+    def sync_for_all_contacts(self, catalog, state, start_date, full_sweep_days=None, max_runtime_minutes=None):
         """
         Request email activities per contact. New emails do not change the contact's udate, so a
         full sweep of every contact runs when there is no previous sweep or the last one is older
         than `full_sweep_days` (0 = every sync). Between full sweeps only contacts updated or with
-        new activities since the last pass are requested. An interrupted full sweep resumes at the
-        last contact id checkpointed in state.
+        new activities since the last pass are requested. A full sweep stops after
+        `max_runtime_minutes` (0 = no limit) and, like an interrupted one, resumes at the last
+        contact id checkpointed in state.
         """
         full_sweep_days = DEFAULT_FULL_SWEEP_DAYS if full_sweep_days is None else float(full_sweep_days)
+        if max_runtime_minutes is None:
+            max_runtime_minutes = DEFAULT_MAX_RUNTIME_MINUTES
+        deadline = time.monotonic() + float(max_runtime_minutes) * 60 if float(max_runtime_minutes) > 0 else None
         self.write_schema(catalog, self.stream_name)
         sweep = state.setdefault('bookmarks', {}).setdefault(SWEEP_STATE_KEY, {})
 
@@ -1147,13 +1154,14 @@ class EmailActivities(ActiveCampaign):
             started = strptime_to_utc(sweep['full_sweep_started'])
             LOGGER.info('Stream: {}, resuming full sweep from contact id {}'.format(
                 self.stream_name, sweep['resume_contact_id']))
-            return self._full_sweep(catalog, state, start_date, sweep, started, sweep['resume_contact_id'])
+            return self._full_sweep(
+                catalog, state, start_date, sweep, started, sweep['resume_contact_id'], deadline)
 
         started = utils.now()
         since = self._incremental_since(sweep, started, full_sweep_days)
         contact_ids = self._changed_contact_ids(since) if since else None
         if contact_ids is None:
-            return self._full_sweep(catalog, state, start_date, sweep, started, 0)
+            return self._full_sweep(catalog, state, start_date, sweep, started, 0, deadline)
 
         LOGGER.info('Stream: {}, incremental pass for {} contacts changed since {}'.format(
             self.stream_name, len(contact_ids), since))
@@ -1248,14 +1256,21 @@ class EmailActivities(ActiveCampaign):
                 parent_id=contact_id)
         return total
 
-    def _full_sweep(self, catalog, state, start_date, sweep, started, last_id):
+    def _full_sweep(self, catalog, state, start_date, sweep, started, last_id, deadline=None):
         total = 0
+        pages_done = 0
         for page in self._contact_pages(last_id=last_id):
+            # Checked only after a page is checkpointed, so every capped sync still makes progress.
+            if page and pages_done and deadline is not None and time.monotonic() >= deadline:
+                LOGGER.info('Stream: {}, time limit reached, full sweep continues from contact id {} '
+                            'on the next sync'.format(self.stream_name, sweep['resume_contact_id']))
+                return total
             total += self._sync_contacts(catalog, state, start_date, page)
             if page:
                 sweep['full_sweep_started'] = utils.strftime(started)
                 sweep['resume_contact_id'] = int(page[-1])
                 singer.write_state(state)
+                pages_done += 1
         sweep.pop('full_sweep_started', None)
         sweep.pop('resume_contact_id', None)
         sweep['last_full_sweep'] = sweep['last_sync'] = utils.strftime(started)

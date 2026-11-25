@@ -217,7 +217,7 @@ This tap:
 - Replication strategy: Full Table
 - Parent stream: contacts (does not require contacts to be selected)
 - Requesting `filters[subscriberid]` imports the contact's emails, so the stream is fetched per contact
-- Contact sweep: every contact is requested in a full sweep on the first sync and then once every `email_activities_full_sweep_days` days (default 7; `0` = every sync). Between full sweeps only contacts updated, or with new `activities`, since the previous sync are requested. If the activities lookup is unavailable, a full sweep runs instead. Activities offset paging can skip rows, so a contact it misses is picked up by the next full sweep. An interrupted full sweep resumes from the last contact checkpointed in state (`bookmarks.email_activities_sweep`)
+- Contact sweep: every contact is requested in a full sweep on the first sync and then once every `email_activities_full_sweep_days` days (default 7; `0` = every sync). Between full sweeps only contacts updated, or with new `activities`, since the previous sync are requested. If the activities lookup is unavailable, a full sweep runs instead. Activities offset paging can skip rows, so a contact it misses is picked up by the next full sweep. An interrupted full sweep resumes from the last contact checkpointed in state (`bookmarks.email_activities_sweep`). A full sweep also stops after `email_activities_max_runtime_minutes` (default 240; `0` = no limit) and continues from the checkpoint on the next sync, so a large account's first sweep is spread over several syncs
 - Transformations: camelCase to snake_case, remove links node
 
 ## Authentication
@@ -259,7 +259,7 @@ This tap:
       }
     ```
 
-    Optional: `email_activities_full_sweep_days` (default `7`) sets how often every contact is re-requested for `email_activities`; `0` requests every contact on every sync.
+    Optional: `email_activities_full_sweep_days` (default `7`) sets how often every contact is re-requested for `email_activities`; `0` requests every contact on every sync. `email_activities_max_runtime_minutes` (default `240`) caps how long one sync spends on a full sweep; `0` removes the cap.
     
     Optionally, also create a `state.json` file. `currently_syncing` is an optional attribute used for identifying the last object to be synced in case the job is interrupted mid-stream. The next run would begin where the last job left off.
 

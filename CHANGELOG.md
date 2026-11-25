@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.8.1
+  * Stop the email_activities full sweep after `email_activities_max_runtime_minutes` (default 240; `0` = no limit) and continue it on the next sync, so a long first sweep no longer keeps the other streams from syncing
+
 ## 1.8.0
   * Request email_activities for every contact only in a periodic full sweep (`email_activities_full_sweep_days`, default 7) and, in between, only for contacts updated or with new activities since the last sync, so run time and volume no longer scale with the contact count on every sync [#60](https://github.com/singer-io/tap-activecampaign/pull/60)
   * Checkpoint the full sweep in state so an interrupted sync resumes from the last contact instead of restarting and re-emitting records [#60](https://github.com/singer-io/tap-activecampaign/pull/60)

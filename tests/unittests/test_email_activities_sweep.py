@@ -8,7 +8,7 @@ from singer.catalog import Catalog, CatalogEntry, Schema
 
 from tap_activecampaign.exceptions import ActiveCampaignForbiddenError
 from tap_activecampaign.schema import get_schemas
-from tap_activecampaign.streams import EmailActivities
+from tap_activecampaign.streams import DEFAULT_MAX_RUNTIME_MINUTES, EmailActivities
 
 START_DATE = '2025-01-01T00:00:00Z'
 NOW = datetime(2026, 11, 19, 12, 0, 0, tzinfo=timezone.utc)
@@ -220,3 +220,73 @@ class TestEmailActivitiesSweep(unittest.TestCase):
                     _catalog_for('email_activities'), state, START_DATE)
 
         self.assertEqual(state['bookmarks'][KEY]['last_sync'], last_sync)
+
+    def _run_with_clock(self, state, readings, **kwargs):
+        """Run with `time.monotonic` returning `readings` in order, then the last reading."""
+        values = iter(readings)
+        last = [readings[-1]]
+
+        def clock():
+            last[0] = next(values, last[0])
+            return last[0]
+
+        with patch('tap_activecampaign.streams.time.monotonic', side_effect=clock):
+            return self._run(state, **kwargs)
+
+    def test_full_sweep_stops_at_time_limit_and_keeps_checkpoint(self):
+        self.all_contacts = list(range(1, 251))
+        state = {}
+
+        # Readings: deadline start, then the check before the second page.
+        self._run_with_clock(state, [0, 100], max_runtime_minutes=1)
+
+        self.assertEqual(self._requested_contacts(), list(range(1, 101)))
+        self.assertEqual(state['bookmarks'][KEY]['resume_contact_id'], 100)
+        self.assertNotIn('last_full_sweep', state['bookmarks'][KEY])
+
+    def test_capped_full_sweep_completes_over_several_syncs(self):
+        self.all_contacts = list(range(1, 251))
+        state = {}
+
+        for _ in range(3):
+            self.client.get.reset_mock()
+            self._run_with_clock(state, [0, 100], max_runtime_minutes=1)
+
+        self.assertEqual(state['bookmarks'][KEY],
+                         {'last_full_sweep': _ts(timedelta()), 'last_sync': _ts(timedelta())})
+        self.assertEqual(self._requested_contacts(), list(range(201, 251)))
+
+    def test_time_limit_still_processes_one_page_per_sync(self):
+        self.all_contacts = list(range(1, 251))
+        state = {}
+
+        self._run_with_clock(state, [0, 10 ** 9], max_runtime_minutes=0.0001)
+
+        self.assertEqual(self._requested_contacts(), list(range(1, 101)))
+
+    def test_zero_minutes_means_no_time_limit(self):
+        self.all_contacts = list(range(1, 251))
+        state = {}
+
+        self._run_with_clock(state, [0, 10 ** 9], max_runtime_minutes=0)
+
+        self.assertEqual(self._requested_contacts(), list(range(1, 251)))
+        self.assertNotIn('resume_contact_id', state['bookmarks'][KEY])
+
+    def test_time_limit_does_not_apply_to_incremental_pass(self):
+        state = {'bookmarks': {KEY: {'last_full_sweep': _ts(timedelta(days=1)), 'last_sync': _ts(timedelta(hours=2))}}}
+        self.changed_contacts = [1, 2, 3]
+
+        self._run_with_clock(state, [0, 10 ** 9], max_runtime_minutes=1)
+
+        self.assertEqual(self._requested_contacts(), [1, 2, 3])
+
+    def test_default_time_limit_is_applied(self):
+        self.all_contacts = list(range(1, 251))
+        state = {}
+        minutes = DEFAULT_MAX_RUNTIME_MINUTES
+
+        self._run_with_clock(state, [0, minutes * 60 - 1, minutes * 60], max_runtime_minutes=None)
+
+        self.assertEqual(self._requested_contacts(), list(range(1, 201)))
+        self.assertEqual(state['bookmarks'][KEY]['resume_contact_id'], 200)
