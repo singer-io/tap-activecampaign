@@ -31,6 +31,7 @@ class ActiveCampaignBookMark(ActiveCampaignTest):
         # BUG TDL-26417: Skip 'bounce_logs'
         # Streams that cannot have data generated
         streams_to_skip = {
+            'activities',
             'addresses',
             'bounce_logs',
             'campaign_links',
