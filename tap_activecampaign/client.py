@@ -1,9 +1,16 @@
+import asyncio
+import json
 import backoff
 import ipaddress
+import threading
+import time
+from collections import deque
 from urllib.parse import urlparse
 import socket
+import aiohttp
 import requests
-from singer import metrics, utils
+from yarl import URL
+from singer import metrics
 import singer
 
 from tap_activecampaign.exceptions import (
@@ -26,6 +33,41 @@ REQUEST_TIMEOUT = 300
 
 DEFAULT_API_VERSION = '3'
 
+
+class RateLimiter:
+    """Allow `limit` request starts per `every` seconds, shared by threads and asyncio tasks."""
+
+    def __init__(self, limit, every):
+        self._every = every
+        self._starts = deque(maxlen=limit)
+        self._lock = threading.Lock()
+
+    def _reserve(self):
+        """Book the next free start time and return how long to wait for it."""
+        # The lock is only held for this bookkeeping, never while sleeping, so it is safe in an event loop.
+        with self._lock:
+            now = time.monotonic()
+            start = now
+            if len(self._starts) == self._starts.maxlen:
+                start = max(now, self._starts[0] + self._every)
+            self._starts.append(start)
+        return start - now
+
+    def wait(self):
+        # singer's utils.ratelimit is not thread-safe, and parallel contact requests share the limit.
+        delay = self._reserve()
+        if delay > 0:
+            time.sleep(delay)
+
+    async def wait_async(self):
+        delay = self._reserve()
+        if delay > 0:
+            await asyncio.sleep(delay)
+
+
+# Rate limit: https://developers.activecampaign.com/reference/rate-limits
+REQUEST_LIMITER = RateLimiter(5, 1)
+
 def should_retry_error(exception):
     """
         Return true if exception is required to retry otherwise return false
@@ -42,6 +84,9 @@ def should_retry_error(exception):
         # Reference: https://app.circleci.com/pipelines/github/singer-io/tap-activecampaign/554/workflows/d448258e-20df-4e66-b2aa-bc8bd1f08912/jobs/558
         return True
     elif type(exception) == ConnectionResetError:
+        return True
+    elif isinstance(exception, aiohttp.ClientConnectionError):
+        # aiohttp's dropped-connection errors (e.g. ServerDisconnectedError) are not OSErrors.
         return True
     else:
         return False
@@ -73,8 +118,13 @@ def raise_for_error(response):
         response_json = response.json() # retrieve json response
     except Exception:
         response_json = {}
+    raise error_for_status(response.status_code, response_json) from None
+
+def error_for_status(status_code, response_json):
+    """Build the exception for an error response; shared by the requests and aiohttp clients."""
+    if not isinstance(response_json, dict):
+        response_json = {}
     errors = response_json.get('errors', [])
-    status_code = response.status_code
     if errors: # response containing `errors` object
         message = 'HTTP-error-code: {}, Error:'.format(status_code)
         # loop through all errors
@@ -89,7 +139,7 @@ def raise_for_error(response):
 
     exc = get_exception_for_status_code(status_code)
 
-    raise exc(message) from None
+    return exc(message)
 
 def is_api_url_valid(api_url):
     parsed_url = urlparse(api_url)
@@ -150,6 +200,11 @@ class ActiveCampaignClient(object):
     def __exit__(self, exception_type, exception_value, traceback):
         self.__session.close()
 
+    def async_client(self, max_connections):
+        """An aiohttp client with the same credentials, timeout and rate limit, for concurrent requests."""
+        return AsyncActiveCampaignClient(
+            self.__api_url, self.__api_token, self.__user_agent, self.request_timeout, max_connections)
+
     def check_api_token(self):
         if self.__api_token is None:
             raise Exception('Error: Missing api_token.')
@@ -175,9 +230,8 @@ class ActiveCampaignClient(object):
                           giveup=lambda e: not should_retry_error(e),
                           max_tries=5,
                           factor=2)
-    # Rate limit: https://developers.activecampaign.com/reference#rate-limits
-    @utils.ratelimit(5, 1)
     def request(self, method, path=None, url=None, api_version=None, **kwargs):
+        REQUEST_LIMITER.wait()
         if not self.__verified:
             self.__verified = self.check_api_token()
 
@@ -230,3 +284,71 @@ class ActiveCampaignClient(object):
 
     def post(self, path, api_version=None, **kwargs):
         return self.request('POST', path=path, api_version=api_version, **kwargs)
+
+
+class AsyncActiveCampaignClient:
+    """
+    asyncio counterpart of ActiveCampaignClient.get, used to request several contacts at the same time.
+    It shares REQUEST_LIMITER with the requests-based client, and maps errors and retries the same way.
+    Create it from ActiveCampaignClient.async_client() (which has already checked the token) and use it
+    as an async context manager inside a running event loop.
+    """
+
+    def __init__(self, api_url, api_token, user_agent, request_timeout, max_connections):
+        self.base_url = '{}/api/{}/'.format(api_url, DEFAULT_API_VERSION)
+        self._api_url = api_url
+        self._headers = {'Api-Token': api_token, 'Accept': 'application/json'}
+        if user_agent:
+            self._headers['User-Agent'] = user_agent
+        self._timeout = aiohttp.ClientTimeout(total=request_timeout)
+        self._max_connections = max_connections
+        self._session = None
+
+    async def __aenter__(self):
+        self._session = aiohttp.ClientSession(
+            headers=self._headers,
+            timeout=self._timeout,
+            connector=aiohttp.TCPConnector(limit_per_host=self._max_connections))
+        return self
+
+    async def __aexit__(self, exception_type, exception_value, traceback):
+        await self._session.close()
+
+    def _url(self, path, params, api_version):
+        url = '{}/api/{}/{}'.format(self._api_url, api_version or DEFAULT_API_VERSION, path)
+        if params:
+            url = '{}?{}'.format(url, params)
+        # Same quoting requests applies to a string querystring, so both clients send identical URLs.
+        return URL(requests.utils.requote_uri(url), encoded=True)
+
+    # Backoff for Server5xxError, Server429Error, OSError, aiohttp connection errors and timeouts.
+    @backoff.on_exception(backoff.expo,
+                          (Exception),
+                          giveup=lambda e: not should_retry_error(e),
+                          max_tries=5,
+                          factor=2)
+    async def get(self, path, params=None, endpoint=None, api_version=None):
+        """GET `path` with `params` (a querystring, as built by the streams) and return the JSON body."""
+        await REQUEST_LIMITER.wait_async()
+        with metrics.http_request_timer(endpoint) as timer:
+            async with self._session.get(self._url(path, params, api_version)) as response:
+                timer.tags[metrics.Tag.http_status_code] = response.status
+                body = await response.read()
+
+        if response.status != 200:
+            try:
+                response_json = json.loads(body)
+            except Exception:
+                response_json = {}
+            raise error_for_status(response.status, response_json)
+
+        if body == b"":
+            # Handling empty response b'' given by ActiveCampaign APIs
+            return {}
+        try:
+            return json.loads(body)
+        except Exception as err:
+            # Log invalid JSON (e.g. unterminated string errors)
+            LOGGER.error('{}'.format(err))
+            LOGGER.error('response content: {}'.format(body))
+            raise

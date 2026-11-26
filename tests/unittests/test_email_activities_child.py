@@ -40,6 +40,22 @@ def _activities(first_id, count):
     }
 
 
+class _AsyncClientOver:
+    """Async client whose requests go to the sync mock's `get`, so call_args_list sees every request."""
+
+    def __init__(self, client):
+        self._client = client
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return None
+
+    async def get(self, path, params=None, endpoint=None):
+        return self._client.get(path=path, params=params, endpoint=endpoint)
+
+
 def _sync_child(client, parent_id=7):
     stream = EmailActivities(client)
     with patch('singer.messages.write_record') as write_record:
@@ -211,6 +227,7 @@ class TestEmailActivitiesFullContactPass(unittest.TestCase):
     def setUp(self):
         self.client = MagicMock()
         self.client.base_url = 'https://example.api-us1.com/api/3/'
+        self.client.async_client.side_effect = lambda max_connections: _AsyncClientOver(self.client)
 
     @staticmethod
     def _keyset_server(contact_ids, after_page=None):
