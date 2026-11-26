@@ -1,4 +1,7 @@
 import singer
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
+from itertools import islice
 from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
 from tap_activecampaign.transform import transform_json
@@ -10,6 +13,11 @@ from tap_activecampaign.exceptions import (
 )
 
 LOGGER = singer.get_logger()
+
+# One-at-a-time contact requests average ~1.7/s against the 5/s API limit, which the client enforces across threads.
+DEFAULT_WORKERS = 4
+# requests.Session keeps 10 connections per host by default.
+MAX_WORKERS = 10
 # streams: API URL endpoints to be called
 # properties:
 #   <root node>: Plural stream name for the endpoint
@@ -1060,6 +1068,25 @@ class EcommerceOrderActivities(ActiveCampaign):
     data_key = 'ecomOrderActivities'
     created_timestamp= 'created_date',
 
+class _PrefetchedClient:
+    """Serves a first-page response fetched ahead of time; any other request goes to the real client."""
+
+    def __init__(self, client, responses):
+        self._client = client
+        self._responses = responses
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def get(self, path, **kwargs):
+        result = self._responses.pop(kwargs.get('params'), None)
+        if result is None:
+            return self._client.get(path=path, **kwargs)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
 class EmailActivities(ActiveCampaign):
     """
     Get data for email_activities.
@@ -1073,16 +1100,63 @@ class EmailActivities(ActiveCampaign):
     data_key = 'emailActivities'
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
+    workers = DEFAULT_WORKERS
 
-    def sync_for_all_contacts(self, catalog, state, start_date):
+    def _first_page_params(self, contact_id):
+        # Must match the query string `sync` builds for a contact's first page, or the prefetch is unused.
+        params = {'offset': 0, 'limit': 100, **self.params, self.parent_query_field: contact_id}
+        return '&'.join('%s=%s' % (key, value) for key, value in params.items())
+
+    def _contacts_with_first_page(self, contact_ids):
+        """
+        Yield (contact_id, client) in contact order. With several workers, the first page of the next
+        few contacts is requested ahead of time; processing, writing and error handling stay on this
+        thread in contact order, so the output is the same as requesting one contact at a time.
+        """
+        if self.workers <= 1 or len(contact_ids) < 2:
+            for contact_id in contact_ids:
+                yield contact_id, self.client
+            return
+
+        def fetch(params):
+            try:
+                return self.client.get(path=self.path, params=params, endpoint=self.stream_name)
+            except Exception as err:  # pylint: disable=broad-except
+                return err  # re-raised in contact order by _PrefetchedClient
+
+        pool = ThreadPoolExecutor(max_workers=self.workers)
+        try:
+            pending = deque()
+            remaining = iter(contact_ids)
+
+            def submit(contact_id):
+                params = self._first_page_params(contact_id)
+                pending.append((contact_id, params, pool.submit(fetch, params)))
+
+            for contact_id in islice(remaining, self.workers * 2):
+                submit(contact_id)
+            while pending:
+                contact_id, params, future = pending.popleft()
+                for next_id in islice(remaining, 1):
+                    submit(next_id)
+                yield contact_id, _PrefetchedClient(self.client, {params: future.result()})
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
+
+    def sync_for_all_contacts(self, catalog, state, start_date, workers=None):
         """
         Request email activities for every contact, not only those changed since the last sync,
-        because new emails do not change the contact's udate.
+        because new emails do not change the contact's udate. Contacts are requested by `workers`
+        threads (1 = one at a time).
         """
+        # Config values may arrive as empty strings, which mean "not set".
+        if workers not in (None, ''):
+            self.workers = max(1, min(int(workers), MAX_WORKERS))
         self.write_schema(catalog, self.stream_name)
         total = 0
         last_id = 0
         limit = 100
+        real_client = self.client
         while True:
             # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
             data = self.client.get(
@@ -1094,16 +1168,20 @@ class EmailActivities(ActiveCampaign):
                 raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
             if contacts and int(contacts[-1]['id']) <= last_id:
                 raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
-            for contact in contacts:
-                total += self.sync(
-                    client=self.client,
-                    catalog=catalog,
-                    state=state,
-                    start_date=start_date,
-                    path=self.path,
-                    selected_streams=[self.stream_name],
-                    parent=self.parent,
-                    parent_id=contact['id'])
+            for contact_id, client in self._contacts_with_first_page([contact['id'] for contact in contacts]):
+                self.client = client
+                try:
+                    total += self.sync(
+                        client=client,
+                        catalog=catalog,
+                        state=state,
+                        start_date=start_date,
+                        path=self.path,
+                        selected_streams=[self.stream_name],
+                        parent=self.parent,
+                        parent_id=contact_id)
+                finally:
+                    self.client = real_client
             if len(contacts) < limit:
                 break
             last_id = int(contacts[-1]['id'])

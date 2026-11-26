@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.7.2
+  * Request the first page of several contacts at the same time for email_activities (`email_activities_workers`, default 4; `1` = one at a time) and make the 5 requests/second limiter thread-safe. Every contact is still requested on every sync and records are written in the same order [#64](https://github.com/singer-io/tap-activecampaign/pull/64)
+
 ## 1.7.1
   * Revert [#59](https://github.com/singer-io/tap-activecampaign/pull/59): the activities stream no longer re-reads the whole history without the `after` filter when paging returns duplicates [#63](https://github.com/singer-io/tap-activecampaign/pull/63)
 
