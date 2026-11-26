@@ -61,6 +61,7 @@ def sync(client, config, catalog, state):
     if 'email_activities' in selected_streams:
         LOGGER.info('START Syncing: email_activities')
         update_currently_syncing(state, 'email_activities')
-        total_records = EmailActivities(client).sync_for_all_contacts(catalog, state, start_date)
+        total_records = EmailActivities(client).sync_for_all_contacts(
+            catalog, state, start_date, workers=config.get('email_activities_workers'))
         update_currently_syncing(state, None)
         LOGGER.info('FINISHED Syncing: email_activities, total_records: {}'.format(total_records))

@@ -215,7 +215,7 @@ This tap:
 - Data key: emailActivities
 - Primary keys: id
 - Replication strategy: Full Table
-- Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected)
+- Parent stream: contacts (all contacts are requested on every sync, regardless of the contacts bookmark; does not require contacts to be selected). Up to `email_activities_workers` contacts are requested at the same time; records are written in contact order
 - Transformations: camelCase to snake_case, remove links node
 
 ## Authentication
@@ -257,6 +257,8 @@ This tap:
       }
     ```
     
+    Optional: `email_activities_workers` (default `4`, maximum `10`) sets how many contacts are requested at the same time for `email_activities`; `1` requests one contact at a time. Every contact is still requested on every sync, and all requests together stay within ActiveCampaign's limit of 5 requests per second.
+
     Optionally, also create a `state.json` file. `currently_syncing` is an optional attribute used for identifying the last object to be synced in case the job is interrupted mid-stream. The next run would begin where the last job left off.
 
     ```json

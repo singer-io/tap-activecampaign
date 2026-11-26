@@ -1,8 +1,13 @@
 # Changelog
 
+## 1.7.2
+  * Request several contacts at the same time for email_activities with asyncio and aiohttp (`email_activities_workers`, default 4; `1` = one at a time with the existing requests client), and share the 5 requests/second limit between both clients. Every contact is still requested on every sync and records are written in the same order [#64](https://github.com/singer-io/tap-activecampaign/pull/64)
+
+## 1.7.1
+  * Revert [#59](https://github.com/singer-io/tap-activecampaign/pull/59): the activities stream no longer re-reads the whole history without the `after` filter when paging returns duplicates [#63](https://github.com/singer-io/tap-activecampaign/pull/63)
+
 ## 1.7.0
   * Sync email_activities per contact using `filters[subscriberid]`, requesting every contact on each sync, so that all email history is returned [#58](https://github.com/singer-io/tap-activecampaign/pull/58)
-  * Re-read the activities stream without the `after` filter when offset paging returns duplicate rows, which means records were skipped [#59](https://github.com/singer-io/tap-activecampaign/pull/59)
 
 ## 1.6.0
   * Mark email_activities as FULL_TABLE stream [#57](https://github.com/singer-io/tap-activecampaign/pull/57)

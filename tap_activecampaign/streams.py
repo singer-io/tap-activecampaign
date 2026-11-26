@@ -1,3 +1,5 @@
+import asyncio
+from collections import deque
 import singer
 from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc
@@ -10,6 +12,12 @@ from tap_activecampaign.exceptions import (
 )
 
 LOGGER = singer.get_logger()
+
+# One-at-a-time contact requests average ~1.7/s against the 5/s API limit, which the clients enforce together.
+DEFAULT_WORKERS = 4
+# Upper bound on concurrent email_activities requests (and on the aiohttp connection pool).
+MAX_WORKERS = 10
+CONTACTS_PAGE_SIZE = 100
 # streams: API URL endpoints to be called
 # properties:
 #   <root node>: Plural stream name for the endpoint
@@ -908,61 +916,12 @@ class Webhooks(ActiveCampaign):
 class Activities(ActiveCampaign):
     """
     Get data for activities.
-    Offset paging with the `after` filter can return duplicate rows and skip others (the API sorts
-    by tstamp without a tie-breaker). Duplicates in a response therefore mean records were missed,
-    and the stream is re-read without `after`, which pages consistently. Records already written by
-    the filtered pass are not written again.
     """
     stream_name = 'activities'
     replication_keys = ['tstamp']
     path = 'activities'
     data_key = 'activities'
     bookmark_query_field = 'after'
-
-    def sync(self, client, catalog, state, start_date, path, selected_streams=None, parent=None, parent_id=None):
-        self._rows_seen = 0
-        self._ids_seen = set()
-        self._written_ids = set()
-        self._pending_bookmark = None
-
-        total = super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
-
-        if self.bookmark_query_field and len(self._ids_seen) < self._rows_seen:
-            LOGGER.warning(
-                'Stream: %s, %s of %s rows returned with the "%s" filter were duplicates, so records were '
-                'skipped. Re-reading without the filter.',
-                self.stream_name, self._rows_seen - len(self._ids_seen), self._rows_seen,
-                self.bookmark_query_field)
-            self.bookmark_query_field = None
-            self._written_ids = self._ids_seen
-            self._rows_seen = 0
-            self._ids_seen = set()
-            total += super().sync(client, catalog, state, start_date, path, selected_streams, parent, parent_id)
-
-        if self._pending_bookmark is not None:
-            super().write_bookmark(state, self.stream_name, self._pending_bookmark)
-        return total
-
-    def process_records(self, catalog, stream_name, records, **kwargs):
-        if self.bookmark_query_field:
-            # Count every row for the duplicate check, but write each id only once.
-            fresh = []
-            for record in records:
-                self._rows_seen += 1
-                if record.get('id') not in self._ids_seen:
-                    fresh.append(record)
-                self._ids_seen.add(record.get('id'))
-            records = fresh
-        else:
-            records = [record for record in records if record.get('id') not in self._written_ids]
-        return super().process_records(catalog, stream_name, records, **kwargs)
-
-    def write_bookmark(self, state, stream, value):
-        # Held back until the response is known to be complete, so a skipped record never sits behind a saved bookmark.
-        # The re-read skips records the filtered pass wrote, so keep the higher of the two passes.
-        if self._pending_bookmark is None or \
-                self.transform_datetime(value) > self.transform_datetime(self._pending_bookmark):
-            self._pending_bookmark = value
 
 class AutomationBlocks(ActiveCampaign):
     """
@@ -1109,6 +1068,26 @@ class EcommerceOrderActivities(ActiveCampaign):
     data_key = 'ecomOrderActivities'
     created_timestamp= 'created_date',
 
+class _PrefetchedClient:
+    """Serves responses fetched ahead of time (re-raising a stored error); any other request goes to the real client."""
+
+    def __init__(self, client, responses):
+        self._client = client
+        self._responses = responses
+
+    def __getattr__(self, name):
+        return getattr(self._client, name)
+
+    def get(self, path, **kwargs):
+        params = kwargs.get('params')
+        if params not in self._responses:
+            return self._client.get(path=path, **kwargs)
+        result = self._responses.pop(params)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
 class EmailActivities(ActiveCampaign):
     """
     Get data for email_activities.
@@ -1122,40 +1101,150 @@ class EmailActivities(ActiveCampaign):
     data_key = 'emailActivities'
     parent = 'contacts'
     parent_query_field = 'filters[subscriberid]'
+    workers = DEFAULT_WORKERS
+    page_size = 100  # the `limit` that `sync` requests
 
-    def sync_for_all_contacts(self, catalog, state, start_date):
+    def sync_for_all_contacts(self, catalog, state, start_date, workers=None):
         """
         Request email activities for every contact, not only those changed since the last sync,
-        because new emails do not change the contact's udate.
+        because new emails do not change the contact's udate. Up to `workers` requests run at the
+        same time on an asyncio event loop (1 = one contact at a time, with the requests client).
         """
+        # Config values may arrive as empty strings, which mean "not set".
+        if workers not in (None, ''):
+            self.workers = max(1, min(int(workers), MAX_WORKERS))
         self.write_schema(catalog, self.stream_name)
-        total = 0
+        if self.workers <= 1:
+            return sum(self._sync_contact(catalog, state, start_date, contact_id, self.client)
+                       for contact_id in self._contact_ids())
+        return asyncio.run(self._sync_all_contacts_async(catalog, state, start_date))
+
+    def _sync_contact(self, catalog, state, start_date, contact_id, client):
+        real_client = self.client
+        self.client = client  # `sync` requests pages through self.client
+        try:
+            return self.sync(
+                client=client,
+                catalog=catalog,
+                state=state,
+                start_date=start_date,
+                path=self.path,
+                selected_streams=[self.stream_name],
+                parent=self.parent,
+                parent_id=contact_id)
+        finally:
+            self.client = real_client
+
+    @staticmethod
+    def _contacts_params(last_id):
+        # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
+        return 'limit={}&orders[id]=ASC&id_greater={}'.format(CONTACTS_PAGE_SIZE, last_id)
+
+    @staticmethod
+    def _ids_from_contacts_page(data, last_id):
+        contacts = data.get('contacts') if isinstance(data, dict) else None
+        if not isinstance(contacts, list):
+            raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
+        if contacts and int(contacts[-1]['id']) <= last_id:
+            raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
+        return [contact['id'] for contact in contacts]
+
+    def _contact_ids(self):
         last_id = 0
-        limit = 100
         while True:
-            # Keyset paging, so contacts deleted between pages cannot shift later ones out of range.
-            data = self.client.get(
-                path='contacts',
-                params='limit={}&orders[id]=ASC&id_greater={}'.format(limit, last_id),
-                endpoint='contacts')
-            contacts = data.get('contacts') if isinstance(data, dict) else None
-            if not isinstance(contacts, list):
-                raise RuntimeError('Malformed contacts response after id {}: {}'.format(last_id, data))
-            if contacts and int(contacts[-1]['id']) <= last_id:
-                raise RuntimeError('Contacts pagination made no progress after id {}'.format(last_id))
-            for contact in contacts:
-                total += self.sync(
-                    client=self.client,
-                    catalog=catalog,
-                    state=state,
-                    start_date=start_date,
-                    path=self.path,
-                    selected_streams=[self.stream_name],
-                    parent=self.parent,
-                    parent_id=contact['id'])
-            if len(contacts) < limit:
-                break
-            last_id = int(contacts[-1]['id'])
+            data = self.client.get(path='contacts', params=self._contacts_params(last_id), endpoint='contacts')
+            contact_ids = self._ids_from_contacts_page(data, last_id)
+            yield from contact_ids
+            if len(contact_ids) < CONTACTS_PAGE_SIZE:
+                return
+            last_id = int(contact_ids[-1])
+
+    async def _contact_ids_async(self, client):
+        last_id = 0
+        while True:
+            data = await client.get(path='contacts', params=self._contacts_params(last_id), endpoint='contacts')
+            contact_ids = self._ids_from_contacts_page(data, last_id)
+            for contact_id in contact_ids:
+                yield contact_id
+            if len(contact_ids) < CONTACTS_PAGE_SIZE:
+                return
+            last_id = int(contact_ids[-1])
+
+    def _page_params(self, contact_id, offset):
+        # Must match the query string `sync` builds for each page, or the prefetched page is unused.
+        params = {'offset': offset, 'limit': self.page_size, **self.params, self.parent_query_field: contact_id}
+        return '&'.join('%s=%s' % (key, value) for key, value in params.items())
+
+    async def _fetch_contact(self, client, semaphore, contact_id):
+        """
+        Request every page of one contact's email activities, stopping where `sync` stops paging.
+        Returns {querystring: response or exception}; errors are kept, not raised, so they surface
+        when `sync` reaches that page, in contact order.
+        """
+        responses = {}
+        ids_seen = set()
+        offset = 0
+        while True:
+            params = self._page_params(contact_id, offset)
+            try:
+                async with semaphore:
+                    data = await client.get(path=self.path, params=params, endpoint=self.stream_name)
+            except Exception as err:  # pylint: disable=broad-except
+                responses[params] = err
+                return responses
+            responses[params] = data
+            rows = data.get(self.data_key) if isinstance(data, dict) else None
+            # `sync` stops on a short page and rejects a malformed page or one with no new ids.
+            if not isinstance(rows, list) or len(rows) < self.page_size:
+                return responses
+            page_ids = {row.get('id') for row in rows if isinstance(row, dict)}
+            if page_ids <= ids_seen:
+                return responses
+            ids_seen |= page_ids
+            offset += self.page_size
+
+    async def _sync_all_contacts_async(self, catalog, state, start_date):
+        """
+        Fetch the next `workers * 2` contacts ahead of time as asyncio tasks, at most `workers`
+        requests at once. Processing, writing and error handling happen here in contact order,
+        so the output is the same as requesting one contact at a time.
+        """
+        total = 0
+        async with self.client.async_client(self.workers) as client:
+            semaphore = asyncio.Semaphore(self.workers)
+            contact_ids = self._contact_ids_async(client)
+            pending = deque()  # (contact_id, task), or (None, error) for a failed contacts page
+
+            async def fill():
+                while len(pending) < self.workers * 2:
+                    try:
+                        contact_id = await anext(contact_ids)
+                    except StopAsyncIteration:
+                        return
+                    except Exception as err:  # pylint: disable=broad-except
+                        # Raised once the contacts before it are written, as the sequential sync does.
+                        pending.append((None, err))
+                        return
+                    pending.append((contact_id, asyncio.create_task(
+                        self._fetch_contact(client, semaphore, contact_id))))
+
+            try:
+                await fill()
+                while pending:
+                    contact_id, item = pending.popleft()
+                    if contact_id is None:
+                        raise item
+                    await fill()
+                    responses = await item
+                    # Blocks the loop while records are written; requests already sent keep downloading.
+                    total += self._sync_contact(
+                        catalog, state, start_date, contact_id, _PrefetchedClient(self.client, responses))
+            finally:
+                tasks = [item for contact_id, item in pending if contact_id is not None]
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                await contact_ids.aclose()
         return total
 
 class Goals(ActiveCampaign):
